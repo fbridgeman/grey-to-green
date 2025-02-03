@@ -9,6 +9,7 @@ This repo contains the necessary raw data, scripts, and results from my research
 ## Repository Structure !! This is a work in progress !!
 *Parentheses () indicate the subdirectory is included in .gitignore and not synced with repo.*
 
+```
 grey-to-green/
 │── configs/              # Config files for training/evaluation
 │   ├── yolov8_config.yaml
@@ -48,3 +49,4 @@ grey-to-green/
 │
 │── .gitignore            # Ignore large/temp files
 │── README.md             # Documentation
+```
