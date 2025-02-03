@@ -1,0 +1,3 @@
+Metric,moving-bicycle,moving-bus,moving-car,moving-heavy-truck,moving-light-truck,moving-motorcycle,stationary-bicycle-offstreet,stationary-bicycle-onstreet,stationary-car-offstreet,stationary-car-onstreet,stationary-heavy-truck-offstreet,stationary-heavy-truck-onstreet,stationary-light-truck-offstreet,stationary-light-truck-onstreet,stationary-motorcycle-offstreet,stationary-motorcycle-onstreet,x_other
+TP,0.0,0.0,9.0,0.0,2.0,0.0,0.0,0.0,23.0,115.0,0.0,0.0,0.0,3.0,0.0,0.0,0.0
+FP,0.0,1.0,23.0,0.0,10.0,6.0,0.0,1.0,37.0,63.0,0.0,2.0,2.0,6.0,0.0,0.0,0.0

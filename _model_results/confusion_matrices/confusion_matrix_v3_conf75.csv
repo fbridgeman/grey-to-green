@@ -1,0 +1,11 @@
+Actual,moving-car,moving-heavy-truck,moving-light-truck,stationary-car-offstreet,stationary-car-onstreet,stationary-heavy-truck-offstreet,stationary-heavy-truck-onstreet,stationary-light-truck-offstreet,stationary-light-truck-onstreet,background
+moving-car,31.0,0.0,3.0,3.0,6.0,0.0,0.0,0.0,0.0,0.0
+moving-heavy-truck,0.0,3.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+moving-light-truck,0.0,0.0,10.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0
+stationary-car-offstreet,1.0,0.0,0.0,30.0,2.0,0.0,0.0,0.0,0.0,2.0
+stationary-car-onstreet,20.0,0.0,1.0,10.0,357.0,0.0,0.0,0.0,8.0,7.0
+stationary-heavy-truck-offstreet,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+stationary-heavy-truck-onstreet,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,0.0,1.0
+stationary-light-truck-offstreet,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+stationary-light-truck-onstreet,0.0,1.0,6.0,0.0,3.0,0.0,0.0,1.0,22.0,0.0
+background,106.0,22.0,26.0,114.0,320.0,1.0,6.0,11.0,41.0,0.0

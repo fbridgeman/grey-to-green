@@ -1,0 +1,5 @@
+Actual,moving-vehicle,stationary-vehicle-offstreet,stationary-vehicle-onstreet,background
+moving-vehicle,81.0,4.0,9.0,0.0
+stationary-vehicle-offstreet,9.0,74.0,14.0,7.0
+stationary-vehicle-onstreet,34.0,13.0,553.0,16.0
+background,106.0,80.0,191.0,0.0

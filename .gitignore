@@ -8,8 +8,6 @@ data/
 v2/
 v3/
 jupyter/
-confusion_matrices/
-class_metrics/
 =2.0.0
 slurm/logs/
 slurm/failed/

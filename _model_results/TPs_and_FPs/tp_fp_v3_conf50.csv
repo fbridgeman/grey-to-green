@@ -1,0 +1,3 @@
+Metric,moving-car,moving-heavy-truck,moving-light-truck,stationary-car-offstreet,stationary-car-onstreet,stationary-heavy-truck-offstreet,stationary-heavy-truck-onstreet,stationary-light-truck-offstreet,stationary-light-truck-onstreet
+TP,53.0,9.0,13.0,59.0,497.0,0.0,2.0,0.0,28.0
+FP,34.0,0.0,7.0,16.0,105.0,0.0,2.0,2.0,24.0
