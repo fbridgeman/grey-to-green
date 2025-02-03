@@ -9,5 +9,5 @@ v2/
 v3/
 jupyter/
 =2.0.0
-slurm/logs/
-slurm/failed/
+_slurm/logs/
+_slurm/failed/
