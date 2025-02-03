@@ -1,0 +1,13 @@
+.env
+envs/
+images/
+.ipynb_checkpoints/
+.jupyter/
+.submititlogs
+data/
+v2/
+v3/
+jupyter/
+confusion_matrices/
+class_metrics/
+=2.0.0
