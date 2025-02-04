@@ -1,0 +1,1486 @@
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lwgeom)
+library(sp)
+library(sf)
+library(ggplot2)
+#setseed(123)
+library(ggspatial)
+library(OpenStreetMap)
+library(osmdata)
+library(ggmap)
+library(basemaps)
+library(sf)
+library(ggnewscale)
+library(ggrepel)
+Sys.setenv(PROJ_LIB = "/Library/Frameworks/R.framework/Versions/4.3-arm64/Resources/library/sf/proj")
+```
+
+FOR EACH STREET WE NEED TO POPULATE THE FOLLOWING VARIABLES
+* NAME
+* BOROUGH
+# PARKING SPACES
+# DETECTED PARKED CARS
+* OTHER OSM STREET DATA ATTRIBUTES
+
+```{r}
+borough_polygons <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)", layer = "london_borough_onstreet")
+borough_polygons$NAME
+original_boroughs = c("Camden",
+                  "City of London",
+                  "Hackney",
+                  "Harrow",
+                  "Hounslow",
+                  "Islington",
+                  "Kensington and Chelsea",
+                  "Sutton",
+                  "Tower Hamlets",
+                  "Wandsworth",
+                  "Westminster")
+data_boroughs = c("Camden",
+                  "Hackney",
+                  "Harrow",
+                  "Hounslow",
+                  "Islington",
+                  "Sutton",
+                  "Tower Hamlets",
+                  "Wandsworth",
+                  "Westminster")
+inner_boroughs = c("Camden",
+                   "City of London",
+                   "Greenwich",
+                   "Hackney",
+                   "Hammersmith and Fulham",
+                   "Islington",
+                   "Kensington and Chelsea",
+                   "Lambeth",
+                   "Lewisham",
+                   "Southwark",
+                   "Tower Hamlets",
+                   "Wandsworth",
+                   "Westminster")
+
+
+borough_num <- data.frame(NUM = c(1:33), NAME = c("City of London", "Westminster", "Kensington and Chelsea", "Hammersmith and Fulham", "Wandsworth", "Lambeth", "Southwark", "Tower Hamlets", "Hackney", "Islington", "Camden", "Brent", "Ealing", "Hounslow", "Richmond upon Thames", "Kingston upon Thames", "Merton", "Sutton", "Croydon", "Bromley", "Lewisham", "Greenwich", "Bexley", "Havering", "Barking and Dagenham", "Redbridge", "Newham", "Waltham Forest", "Haringey", "Enfield", "Barnet", "Harrow", "Hillingdon"))
+
+cand_num <- data.frame(CAND_NUM = c(1:9),
+                       NAME = c("Camden",
+                  "Hackney",
+                  "Harrow",
+                  "Hounslow",
+                  "Islington",
+                  "Sutton",
+                  "Tower Hamlets",
+                  "Wandsworth",
+                  "Westminster"))
+
+# Add num to `borough_polygons`
+borough_polygons <- borough_polygons %>%
+  right_join(borough_num, by = "NAME")
+borough_polygons <- borough_polygons %>%
+  left_join(cand_num, by = "NAME")
+
+borough_polygons <- borough_polygons %>%
+  mutate(original_source = NAME %in% original_boroughs) %>%
+  mutate(data_source = NAME %in% data_boroughs) %>%
+  mutate(inner = NAME %in% inner_boroughs)
+
+correct_proj <- st_crs(borough_polygons)
+```
+
+```{r}
+set.seed(123)
+borough_polygons %>% filter(NAME == "Kensington and Chelsea")
+# This script will download all the streets in London into an sf package
+# from OSMdata.  We need to make sure we collect all the important street attributes
+# Including its name, what type of street it is, how long the street is etc.
+
+
+# INITIALISE EMPTY LINESTRING OBJECT
+# Create an empty sf object with LINESTRING geometry and no predefined columns
+# data_streets <- st_sf(
+#   geometry = st_sfc(),  # Empty geometry
+#   crs = 4326            # Set CRS (e.g., WGS84)
+# )
+
+# Print the empty sf object
+print(data_streets)
+
+# create a filter of the values of we want from the highway key
+highway_values = c("motorway",
+                   "trunk",
+                   "primary",
+                   "secondary",
+                   "tertiary",
+                   "unclassified",
+                   "residential",
+                   "living_street",
+                   "road")
+
+# Loop through each borough
+data_boroughs_name = c("Camden",
+                  "Hackney",
+                  "Harrow",
+                  "Hounslow",
+                  "Islington",
+                  "Sutton",
+                  "Tower Hamlets",
+                  "Wandsworth",
+                  "Westminster")
+
+regression_boroughs = c("Camden",
+                        "Hackney",
+                        #"Kensington and Chelsea",
+                        "Islington",
+                        "Westminster")
+
+data_boroughs_iso = c("GB-CMD",
+                  "GB-HCK",
+                  "GB-HRW",
+                  "GB-HNS",
+                  "GB-ISL",
+                  "GB-STN",
+                  "GB-TWH",
+                  "GB-WND",
+                  "GB-WSM")
+
+regression_boroughs_iso = c("GB-CMD",
+                        "GB-HCK",
+                        #"GB-KEC",
+                        "GB-ISL",
+                        "GB-WSM")
+
+# for (borough in regression_boroughs_iso) {
+#   message("Processing: ", borough)
+#   bb_data <- getbb(borough, format_out = 'data.frame')
+#   bb_district_name <- bb_data$name
+# 
+#   message("Processing: ", borough, " known in OSM as ", bb_district_name)
+#   bb_district <- getbb(borough, format_out = 'polygon')
+#   
+#   # Query OSM for streets in the borough
+#   q <- opq(bb_district) %>%
+#     add_osm_feature(key = 'highway', value = highway_values)
+#   
+#   # Print message updating status
+#   message("Successfully queried OSM for streets in ", borough, " AKA ", bb_district_name)
+# 
+#   # Get the data
+#   x <- osmdata_sf(q) %>%
+#     # trim the data to the polygon
+#     trim_osmdata(bb_district)
+#   
+#   # message updating status
+#   message("Successfully created sf object and trimmed the data to the polygon")
+#   
+#   x_streets <- x$osm_lines
+#   x_streets$borough <- borough
+#   
+#   # Append the data to the empty sf object
+#   data_streets <- bind_rows(data_streets, x_streets)
+#   
+#   # Print message updating status (total nrows in data_streets)
+#   message("Successfully appended ", nrow(x_streets), " streets to data_streets")
+#   message("Total number of streets in data_streets: ", nrow(data_streets))
+# }
+# 
+# # Now, calculate the length of each street
+# data_streets <- data_streets %>%
+#   mutate(length = st_length(geometry))
+
+# Print the first few rows of the data
+data_streets %>% select(name, length) %>% head()
+
+# Sample 500 streets with a length greater than 10 m
+# sample_streets <- data_streets %>%
+#   filter(borough %in% regression_boroughs_iso) %>%
+#   mutate(length = as.numeric(length)) %>%
+#   filter(length > 50) %>%
+#   filter(is.na(bridge) == TRUE) %>%
+#   filter(is.na(tunnel) == TRUE) %>%
+#   sample_n(500)
+
+sample_streets$borough %>% unique()
+
+# Save sample as csv
+# WGS 84
+# write.csv(sample_streets$osm_id, "clean_data/sample_streets_list.csv")
+# st_write(sample_streets, "clean_data/sample_streets.shp")
+sample_streets_master <- sample_streets
+#sample_streets <- st_read("clean_data/sample_streets.shp")
+
+sample_streets <- sample_streets %>%
+  select(osm_id,
+         name,
+         alt_name,
+         borough,
+         highway,
+         maxspeed,
+         "maxspeed:type",
+         oneway,
+         sidewalk,
+         "sidewalk:both",
+         "sidewalk:left",
+         "sidewalk:right",
+         bridge,
+         tunnel,
+         length,
+         geometry)
+
+
+# rename boroughs their real names instead of iso codes
+sample_streets <- sample_streets %>%
+  mutate(borough = case_when(
+    borough == "GB-CMD" ~ "Camden",
+    borough == "GB-KEC" ~ "Kensington and Chelsea",
+    borough == "GB-HCK" ~ "Hackney",
+    borough == "GB-HRW" ~ "Harrow",
+    borough == "GB-HNS" ~ "Hounslow",
+    borough == "GB-ISL" ~ "Islington",
+    borough == "GB-STN" ~ "Sutton",
+    borough == "GB-TWH" ~ "Tower Hamlets",
+    borough == "GB-WND" ~ "Wandsworth",
+    borough == "GB-WSM" ~ "Westminster"
+  ))
+
+#### SAMPLE STREETS CREATED 
+
+# sample street buffers
+sf_use_s2(FALSE)
+sample_streets_buffers <- sample_streets %>%
+  st_transform(crs = 27700) %>%
+  st_buffer(dist = 10, endCapStyle = "FLAT") %>%
+  st_transform(crs = 4326)
+sf_use_s2(TRUE)
+
+# plot buffers
+ggplot() +
+  geom_sf(data = sample_streets_buffers[1,],
+          fill = "blue",
+          alpha = 0.2) +
+  geom_sf(data = sample_streets[1,],
+          color = "red",
+          size = 0.5) +
+  theme_void()
+
+#### SAMPLE STREETS BUFFERS CREATED
+
+```
+
+
+# VISUALISE SAMPLED STREETS
+```{r}
+
+# Visualise Sampled Streets
+ddv <- sample_streets %>%
+  # transform crs to WGS 84
+  st_transform(3857)
+
+ggplot() +
+  basemap_gglayer(
+    ext = st_bbox(ddv),
+    map_service = "osm",
+    map_type = "streets",
+    alpha = 0.2
+  ) +
+  scale_fill_identity() +
+  geom_sf(data = ddv,
+          aes(color = borough),
+          linewidth = 0.5) +
+  coord_sf() +
+  theme_void() +
+  theme(legend.position = "none")
+
+# Recall parking data
+# joint_polylines
+# joint_points
+# joint_polygons
+```
+
+
+# GET SAMPLE STREET PANOIDS
+```{r}
+# Plot Samples Streets with PANOIDS for a selected bbox
+sample_streets # WGS 84
+all_images_with_boroughs # OSGB36 / British National Grid
+
+# so we must collect panoids that are within 6m of our streets
+sample_street_panoids <- all_images_with_boroughs %>%
+  st_transform(st_crs(sample_streets))  %>% 
+  filter(borough %in% data_boroughs_name) %>%
+  filter(map_lgl(
+    st_is_within_distance(geometry, sample_streets, dist = 10),
+    ~ length(.x) > 0  # Check if there is at least one match
+  ))
+  
+sample_street_panoids
+
+
+
+```
+
+# SAVE PANOIDS FOR DEPLOYMENT AND REFERENCE
+
+```{r}
+sample_street_panoids
+all_images_with_boroughs$borough %>% unique()
+
+camden_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Camden")
+
+hackney_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Hackney")
+
+harrow_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Harrow")
+
+hounslow_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Hounslow")
+
+islington_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Islington")
+
+sutton_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Sutton")
+
+tower_hamlets_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Tower Hamlets")
+
+wandsworth_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Wandsworth")
+
+westminster_panoids <- all_images_with_boroughs %>%
+  filter(borough == "Westminster")
+
+# This script finds the panoids paths used for labeling parked vs moving vehicles in Roboflow.
+
+# Load the CSV file
+csv_path <- "2024-09-15 14_44_20.478681_fileInfo.csv"
+csv_df <- read.csv(csv_path, stringsAsFactors = FALSE)
+
+# Extract the 'panoid' by removing everything after the last underscore and .jpg
+csv_df <- csv_df %>%
+  mutate(panoid = str_extract(name, ".*(?=_)")) %>%
+  # degrees is after the last underscore and before .jpg
+  mutate(degrees = str_extract(name, "(?<=_)[0-9]+(?=\\.jpg)"))
+
+# Filter the CSV data to keep only rows where the 'panoid' is present in the shapefile panoids
+filtered_sample_csv <- csv_df %>%
+  filter(panoid %in% sample_street_panoids$panoid)
+
+filtered_all_csv <- csv_df %>%
+  filter(panoid %in% all_images_with_boroughs$panoid)
+
+camden_csv <- csv_df %>%
+  filter(panoid %in% camden_panoids$panoid)
+
+hackney_csv <- csv_df %>%
+  filter(panoid %in% hackney_panoids$panoid)
+
+harrow_csv <- csv_df %>%
+  filter(panoid %in% harrow_panoids$panoid)
+
+hounslow_csv <- csv_df %>%
+  filter(panoid %in% hounslow_panoids$panoid)
+
+islington_csv <- csv_df %>%
+  filter(panoid %in% islington_panoids$panoid)
+
+sutton_csv <- csv_df %>%
+  filter(panoid %in% sutton_panoids$panoid)
+
+tower_hamlets_csv <- csv_df %>%
+  filter(panoid %in% tower_hamlets_panoids$panoid)
+
+wandsworth_csv <- csv_df %>%
+  filter(panoid %in% wandsworth_panoids$panoid)
+
+westminster_csv <- csv_df %>%
+  filter(panoid %in% westminster_panoids$panoid)
+
+
+# Display the filtered paths that correspond to the panoids in the shapefile
+filtered_sample_csv_df <- filtered_sample_csv %>%
+  select(folder, name, type)
+
+filtered_all_csv_df <- filtered_all_csv %>%
+  select(folder, name, type)
+
+camden_csv_df <- camden_csv %>%
+  select(folder, name, type)
+
+hackney_csv_df <- hackney_csv %>%
+  select(folder, name, type)
+
+harrow_csv_df <- harrow_csv %>%
+  select(folder, name, type)
+
+hounslow_csv_df <- hounslow_csv %>%
+  select(folder, name, type)
+
+islington_csv_df <- islington_csv %>%
+  select(folder, name, type)
+
+sutton_csv_df <- sutton_csv %>%
+  select(folder, name, type)
+
+tower_hamlets_csv_df <- tower_hamlets_csv %>%
+  select(folder, name, type)
+
+wandsworth_csv_df <- wandsworth_csv %>%
+  select(folder, name, type)
+
+westminster_csv_df <- westminster_csv %>%
+  select(folder, name, type)
+
+# Save output paths
+
+filtered_street_sample_path <- "./results/sample_street_panoid_fileInfo-deploy.csv"
+all_images_path <- "./results/all_svis_panoid_fileInfo-deploy.csv"
+camden_path <- "./results/camden_panoid_fileInfo-deploy.csv"
+hackney_path <- "./results/hackney_panoid_fileInfo-deploy.csv"
+harrow_path <- "./results/harrow_panoid_fileInfo-deploy.csv"
+hounslow_path <- "./results/hounslow_panoid_fileInfo-deploy.csv"
+islington_path <- "./results/islington_panoid_fileInfo-deploy.csv"
+sutton_path <- "./results/sutton_panoid_fileInfo-deploy.csv"
+tower_hamlets_path <- "./results/tower_hamlets_panoid_fileInfo-deploy.csv"
+wandsworth_path <- "./results/wandsworth_panoid_fileInfo-deploy.csv"
+westminster_path <- "./results/westminster_panoid_fileInfo-deploy.csv"
+
+for(i in unique(all_images_with_boroughs$borough)) {
+  borough_panoids <- all_images_with_boroughs %>%
+    filter(borough == i)
+  
+  borough_csv <- csv_df %>%
+    filter(panoid %in% borough_panoids$panoid)
+  
+  borough_csv_df <- borough_csv %>%
+    select(folder, name, type)
+  
+  write.csv(borough_csv_df, paste0("./results/", i, "_panoid_fileInfo-deploy.csv"), row.names = FALSE)
+}
+
+
+write.csv(filtered_sample_csv_df, filtered_street_sample_path, row.names = FALSE)
+write.csv(filtered_all_csv_df, all_images_path, row.names = FALSE)
+write.csv(camden_csv_df, camden_path, row.names = FALSE)
+write.csv(hackney_csv_df, hackney_path, row.names = FALSE)
+write.csv(harrow_csv_df, harrow_path, row.names = FALSE)
+write.csv(hounslow_csv_df, hounslow_path, row.names = FALSE)
+write.csv(islington_csv_df, islington_path, row.names = FALSE)
+write.csv(sutton_csv_df, sutton_path, row.names = FALSE)
+write.csv(tower_hamlets_csv_df, tower_hamlets_path, row.names = FALSE)
+write.csv(wandsworth_csv_df, wandsworth_path, row.names = FALSE)
+write.csv(westminster_csv_df, westminster_path, row.names = FALSE)
+
+# original_selected_panoids$panoid == inside_selected_panoids$panoid
+# compare the two dataframes
+# original_selected_panoids <- read.csv("./panoids/london-panoid_fileInfo-roboflow.csv")
+# original_selected_panoids$panoid == inside_selected_panoids$panoid
+
+```
+
+# RETRIEVAL OF PREDICTED PARKING SPACES
+
+```{r}
+x <- image_preds_75 %>% filter(panoid %in% filtered_sample_csv$panoid) %>% nrow()
+t <- image_preds_75 %>% nrow()
+x
+t
+
+preds_per_panoid_75
+
+
+# read the csv file
+dir <- '/Users/felixbridgeman/My Drive/_STATS THESIS/GIS Match/SAMPLE RESULTS'
+name_75 <- '__image_sample_class_counts_conf75.csv'
+name_85 <- '__image_sample_class_counts_conf85.csv'
+
+image_preds_75 <- read.csv(file.path(dir, name_75)) %>%
+  mutate(panoid = str_extract(image_name, ".*(?=_[^_]+$)")) %>%
+  mutate(angle = str_extract(image_name, "(?<=_)[^_]+(?=\\.jpg)"))
+
+image_preds_85 <- read.csv(file.path(dir, name_85))  %>%
+  mutate(panoid = str_extract(image_name, ".*(?=_[^_]+$)")) %>%
+  mutate(angle = str_extract(image_name, "(?<=_)[^_]+(?=\\.jpg)"))
+# 
+# image_preds <- read.csv("__sample_image_class_counts.csv") %>%
+#   mutate(panoid = str_extract(image_name, ".*(?=_[^_]+$)")) %>%
+#   mutate(angle = str_extract(image_name, "(?<=_)[^_]+(?=\\.jpg)"))
+# extract panoid from image name
+
+preds_per_panoid_75 <- image_preds_75 %>%
+  group_by(panoid) %>%
+  summarise(moving.vehicle = sum(moving.vehicle),
+            stationary.vehicle.offstreet = sum(stationary.vehicle.offstreet),
+            stationary.vehicle.onstreet = sum(stationary.vehicle.onstreet)) %>%
+  # rename append .75
+  rename(moving.vehicle.75 = moving.vehicle,
+         stationary.vehicle.offstreet.75 = stationary.vehicle.offstreet,
+         stationary.vehicle.onstreet.75 = stationary.vehicle.onstreet)
+
+preds_per_panoid_85 <- image_preds_85 %>%
+  group_by(panoid) %>%
+  summarise(moving.vehicle = sum(moving.vehicle),
+            stationary.vehicle.offstreet = sum(stationary.vehicle.offstreet),
+            stationary.vehicle.onstreet = sum(stationary.vehicle.onstreet)) %>%
+  # rename append .85
+  rename(moving.vehicle.85 = moving.vehicle,
+         stationary.vehicle.offstreet.85 = stationary.vehicle.offstreet,
+         stationary.vehicle.onstreet.85 = stationary.vehicle.onstreet)
+
+# join the panoids with the predicted counts
+sample_results <- sample_street_panoids %>%
+  left_join(preds_per_panoid_75, by = "panoid") %>%
+  left_join(preds_per_panoid_85, by = "panoid")
+
+# check for NAs
+sample_results %>%
+  filter(is.na(moving.vehicle.75) | is.na(stationary.vehicle.offstreet.75) | is.na(stationary.vehicle.onstreet.75)) 
+
+# fill NAs with 0 (cols 8-13)
+sample_results <- sample_results %>%
+  mutate(moving.vehicle.75 = ifelse(is.na(moving.vehicle.75), 0, moving.vehicle.75),
+         stationary.vehicle.offstreet.75 = ifelse(is.na(stationary.vehicle.offstreet.75), 0, stationary.vehicle.offstreet.75),
+         stationary.vehicle.onstreet.75 = ifelse(is.na(stationary.vehicle.onstreet.75), 0, stationary.vehicle.onstreet.75),
+         moving.vehicle.85 = ifelse(is.na(moving.vehicle.85), 0, moving.vehicle.85),
+         stationary.vehicle.offstreet.85 = ifelse(is.na(stationary.vehicle.offstreet.85), 0, stationary.vehicle.offstreet.85),
+         stationary.vehicle.onstreet.85 = ifelse(is.na(stationary.vehicle.onstreet.85), 0, stationary.vehicle.onstreet.85))
+
+# check for NAs
+sample_results %>%
+  filter(is.na(moving.vehicle.75) | is.na(stationary.vehicle.offstreet.75) | is.na(stationary.vehicle.onstreet.75) | is.na(moving.vehicle.85) | is.na(stationary.vehicle.offstreet.85) | is.na(stationary.vehicle.onstreet.85))
+
+
+# WHAT WE DID EARLIER
+# sample_street_panoids <- all_images_with_boroughs %>%
+#   st_transform(st_crs(sample_streets))  %>% 
+#   filter(borough %in% data_boroughs_name) %>%
+#   filter(map_lgl(
+#     st_is_within_distance(geometry, sample_streets, dist = 6),
+#     ~ length(.x) > 0  # Check if there is at least one match
+#   ))
+#   
+# sample_street_panoids
+
+```
+
+# Find predicted cars per street
+
+```{r}
+# create a list of panoids per street
+sample_streets
+
+
+```
+
+# RETRIEVAL OF PREDICTED YOLO DETECTIONS ON SAMPLE STREETS
+
+```{r}
+# WHAT WE DID EARLIER
+# sample_street_panoids <- all_images_with_boroughs %>%
+#   st_transform(st_crs(sample_streets))  %>% 
+#   filter(borough %in% data_boroughs_name) %>%
+#   filter(map_lgl(
+#     st_is_within_distance(geometry, sample_streets, dist = 6),
+#     ~ length(.x) > 0  # Check if there is at least one match
+#   ))
+#   
+# sample_street_panoids
+
+# streets_results <- sample_streets %>%
+#   st_transform(correct_proj)
+streets_results
+
+streets_buffers <- st_buffer(streets_results, dist = 10)
+
+streets_results$moving.vehicle.75 <- 0
+streets_results$stationary.vehicle.offstreet.75 <- 0
+streets_results$stationary.vehicle.onstreet.75 <- 0
+streets_results$moving.vehicle.85 <- 0
+streets_results$stationary.vehicle.offstreet.85 <- 0
+streets_results$stationary.vehicle.onstreet.85 <- 0
+
+sample_results_proj <- sample_results %>%
+  st_transform(correct_proj)
+
+### GETTING THE CAR PREDICTIONS FOR EACH STREET
+for (i in 1:nrow(streets_results)) {
+  street <- streets_results[i,]
+  
+  street_buffer <- streets_buffers[i ,]
+  #street_buffer <- st_buffer(street, endCapStyle = "FLAT", dist = 10)
+
+  street_panoids <- sample_results_proj %>%
+    filter(map_lgl(st_intersects(geometry, street_buffer),
+                   ~ length(.x) > 0  # Check if there is at least one match
+                   ))
+  
+  message("working on street:", i)
+  
+  # only do this if there are panoids
+  if (nrow(street_panoids) > 0) {
+    street_summary <- street_panoids %>%
+      summarise(moving.vehicle.75 = sum(moving.vehicle.75),
+                stationary.vehicle.offstreet.75 = sum(stationary.vehicle.offstreet.75),
+                stationary.vehicle.onstreet.75 = sum(stationary.vehicle.onstreet.75),
+                moving.vehicle.85 = sum(moving.vehicle.85),
+                stationary.vehicle.offstreet.85 = sum(stationary.vehicle.offstreet.85),
+                stationary.vehicle.onstreet.85 = sum(stationary.vehicle.onstreet.85))
+    
+    streets_results[i, "moving.vehicle.75"] <- street_summary$moving.vehicle.75
+    streets_results[i, "stationary.vehicle.offstreet.75"] <- street_summary$stationary.vehicle.offstreet.75
+    streets_results[i, "stationary.vehicle.onstreet.75"] <- street_summary$stationary.vehicle.onstreet.75
+    streets_results[i, "moving.vehicle.85"] <- street_summary$moving.vehicle.85
+    streets_results[i, "stationary.vehicle.offstreet.85"] <- street_summary$stationary.vehicle.offstreet.85
+    streets_results[i, "stationary.vehicle.onstreet.85"] <- street_summary$stationary.vehicle.onstreet.85
+  }
+}
+
+streets_results %>% filter(stationary.vehicle.onstreet.75 == 0) %>% nrow()
+
+```
+
+### NOW WE GET THE GROUND TRUTH PARKING FOR EACH STREET
+
+```{r}
+#streets_results$parking_spaces <- 0
+
+
+for (i in 1:nrow(streets_results)) {
+  street <- streets_results[i, ]
+  street_buffer <- streets_buffers[i, ]
+  
+  # Handle polygon spaces
+  polygon_spaces <- joint_polygons_clean %>%
+    st_make_valid() %>%
+    # get all within 100 m
+    filter(map_lgl(st_is_within_distance(geometry, street_buffer, dist = 30), ~ length(.x) > 0)) %>%
+    filter(map_lgl(st_intersects(geometry, street_buffer), ~ length(.x) > 0))
+  
+  if (nrow(polygon_spaces) > 0) {
+    polygon_spaces <- polygon_spaces %>%
+      summarise(parking_spaces = sum(parking_spaces, na.rm = TRUE))
+  } else {
+    polygon_spaces <- tibble(parking_spaces = 0)
+  }
+  
+  # Handle point spaces
+  point_spaces <- joint_points_clean %>%
+     # get all within 100 m
+    filter(map_lgl(st_is_within_distance(geometry, street_buffer, dist = 30), ~ length(.x) > 0)) %>%
+    filter(map_lgl(st_intersects(geometry, street_buffer), ~ length(.x) > 0))
+  
+  if (nrow(point_spaces) > 0) {
+    point_spaces <- point_spaces %>%
+      summarise(parking_spaces = sum(parking_spaces, na.rm = TRUE))
+  } else {
+    point_spaces <- tibble(parking_spaces = 0)
+  }
+  
+  # Handle polyline spaces
+  polyline_spaces <- joint_polylines_clean %>%
+    st_make_valid() %>%
+     # get all within 100 m
+    filter(map_lgl(st_is_within_distance(geometry, street_buffer, dist = 30), ~ length(.x) > 0)) %>%
+    filter(map_lgl(st_intersects(geometry, street_buffer), ~ length(.x) > 0))
+  
+  if (nrow(polyline_spaces) > 0) {
+    polyline_spaces <- polyline_spaces %>%
+      summarise(parking_spaces = sum(parking_spaces, na.rm = TRUE))
+  } else {
+    polyline_spaces <- tibble(parking_spaces = 0)
+  }
+  
+  # Calculate total parking spaces
+  total_spaces <- polygon_spaces$parking_spaces + 
+                  point_spaces$parking_spaces + 
+                  polyline_spaces$parking_spaces
+  
+  # Update result
+  streets_results$parking_spaces[i] <- total_spaces
+  print(paste("Street ", i, " has ", total_spaces, " parking spaces"))
+}
+
+
+```
+
+# Diagnosing invalid geometries in joint_polygon clean
+```{r}
+
+# # Check validity of polygons
+# invalid_polygons <- joint_polygons_clean %>%
+#   st_transform(st_crs(sample_streets)) %>%
+#   filter(!st_is_valid(geometry))
+# message("Invalid polygons: ", nrow(invalid_polygons))
+# 
+# # Check validity of points
+# invalid_points <- joint_points_clean %>%
+#     st_transform(st_crs(sample_streets)) %>%
+#   filter(!st_is_valid(geometry))
+# message("Invalid points: ", nrow(invalid_points))
+# 
+# # Check validity of lines
+# invalid_lines <- joint_polylines_clean %>%
+#   st_transform(st_crs(sample_streets)) %>%
+#   filter(!st_is_valid(geometry))
+# message("Invalid lines: ", nrow(invalid_lines))
+# 
+# invalid_streets <- sample_streets %>%
+#   filter(!st_is_valid(geometry))
+# 
+# # Check for zero-length polygons
+# zero_length_polygons <- joint_polygons_clean %>%
+#   st_transform(st_crs(sample_streets)) %>%
+#   filter(st_area(geometry) == 0)
+# 
+# message("Zero-length polygons: ", nrow(zero_length_polygons))
+# 
+# # Check for zero-length lines
+# zero_length_lines <- joint_polylines_clean %>%
+#   st_transform(st_crs(sample_streets)) %>%
+#   filter(st_length(geometry) == 0)
+# 
+# message("Zero-length lines: ", nrow(zero_length_lines))
+# 
+# # View details of the invalid geometries
+# print(joint_polygons_clean %>% filter(!st_is_valid(geometry)))
+# 
+# polygons_fixed <- joint_polygons_clean %>%
+#   st_make_valid(geometry)
+# 
+# polygons_fixed %>% filter(!st_is_valid(polygons_fixed))
+# 
+# polygons_fixed2 <- joint_polygons_clean %>%
+#   st_buffer(., dist = 0)
+# 
+# polygons_fixed2 %>% filter(!st_is_valid(polygons_fixed))
+# 
+# # map joint_polygons_clean, polygons_fixed, and polygons_fixed2 to see what has changed
+# gp1 <- joint_polygons_clean %>% filter(!st_is_valid(geometry))
+# # gp2 and gp3 should be the rows that were invalid in joint_polygons_clean
+# gp2 <- polygons_fixed %>% filter(!st_is_valid(joint_polygons_clean, geometry))
+# gp3 <- polygons_fixed2 %>% filter(!st_is_valid(joint_polygons_clean, geometry))
+# 
+# gp1_trans <- st_transform(gp1, 4326)
+# gp2_trans <- st_transform(gp2, 4326)
+# gp3_trans <- st_transform(gp3, 4326)
+# 
+# library(leaflet)
+# # use leaflet to map each polygon on top of each other one r, one g, one b, alpha = 0.2
+# # Error in addPolygons(., data = gp3, color = "blue", fillOpacity = 0.2) : 
+#  # could not find function "addPolygons"
+# 
+# leaflet() %>%
+#   addTiles() %>%
+#   # Add polygons with named groups
+#   addPolygons(
+#     data = gp1_trans,
+#     color = "red",
+#     fillOpacity = 0.2,
+#     popup = ~paste("<b>Group:</b>", "Original"),
+#     group = "original"
+#   ) %>%
+#   addPolygons(
+#     data = gp2_trans,
+#     color = "green",
+#     fillOpacity = 0.2,
+#     popup = ~paste("<b>Group:</b>", "Fixed with make valid"),
+#     group = "st_make_valid"
+#   ) %>%
+#   addPolygons(
+#     data = gp3_trans,
+#     color = "blue",
+#     fillOpacity = 0.2,
+#     popup = ~paste("<b>Group:</b>", "Fixed with 0 buffer"),
+#     group = "0_buffer"
+#   ) %>%
+#   # Add a legend
+#   addLegend(
+#     position = "bottomright",
+#     colors = c("red", "green", "blue"),
+#     labels = c("original", "st_make_valid", "0_buffer"),
+#     title = "Polygon Groups",
+#     opacity = 1
+#   ) %>%
+#   # Add layer control
+#   addLayersControl(
+#     overlayGroups = c("original", "st_make_valid", "0_buffer"),  # Names of groups
+#     options = layersControlOptions(collapsed = FALSE)   # Expand by default
+#   )
+
+# st_make_valid does not interfere with geometry so I have introduced an
+# st_make_valid() line in the original code that generates joint_polygons_clean
+
+
+```
+
+
+# PLOTS
+
+```{r}
+# map the sample streets and panoids
+
+ddarea <- borough_polygons %>%
+  filter(regression_source) %>%
+  # merge polygons 
+  st_union() %>%
+  # buffer
+  st_buffer(., dist = 500) %>%
+  # transform crs to WGS 84
+  st_transform(3857)
+  
+ddb <- borough_polygons %>%
+  filter(regression_source) %>%
+  st_transform(3857)
+
+ddv <- streets_results %>%
+  # transform crs to WGS 84
+  st_transform(3857) #%>%
+  # filter(borough == "GB-WSM")
+
+ddp <- sample_results %>%
+  st_transform(3857) # %>%
+  # filter(borough == "Westminster")
+
+ext <- st_bbox(ddarea)
+
+MAPBOX_TOKEN <- "pk.eyJ1IjoiZmJyaWRnZW1hbiIsImEiOiJjbTFtbHNtcXIwaTJ0MnBwcjE1dDJ4b2h1In0.HZH9s1KLxMISBzKCukFrpw"
+g1 <- basemap_ggplot(
+    ext = ext,
+    map_service = "mapbox",
+    map_type = "light",
+    map_token = MAPBOX_TOKEN
+  ) +
+  geom_sf(data = ddb,
+          fill = NA,
+          color = "black",
+          size = 0.1) +
+  geom_sf(data = ddv,
+          aes(color = "Street Segments"),
+          linewidth = 0.5) +
+  geom_sf(data = ddp,
+          aes(color = "SVI PanoIDs"),
+          size = 0.01) +
+  coord_sf(expand = FALSE) +
+  geom_text() +
+  labs(
+    title = "All Sampled Streets and SVI PanoIDs",
+  ) +
+  # legend
+  scale_color_manual(values = c("blue", "red"),
+                     labels = c("Street Segments", "SVI PanoIDs")) +
+  # make legend appear
+  guides(color = guide_legend(title = "Data Source")) +
+  theme_void(base_size = 8) +
+  # legend bottom right
+  theme(legend.position.inside = c(0.68, 0.05),
+        legend.position = "none",
+        plot.margin = margin(0.1, 0.01, 0, 0, "cm"),
+        plot.title = element_text(#family = "Arial",
+                                  size = 12,
+                                  vjust = 3,
+                                  hjust = 0.5),
+    legend.justification = c(0, 0),  # Align legend inside bottom-left
+    legend.background = element_rect(fill = "white", color = "grey20", 
+                                     linewidth = (linewidth = 0.5) / .pt),
+    legend.margin = margin(5, 5, 5, 5)  # Small padding inside the legend box
+  )
+g1
+ggsave(g1, filename = "./figs/all_example_streets.png", width = 7.5, dpi = 300)
+
+
+ddv2 <- streets_results[4, ] %>%
+  st_transform(3857)
+
+ddv2buffer <- st_buffer(ddv2, dist = 10)
+
+ext2 <- st_bbox(ddv2 %>% st_buffer(., dist = 20))
+
+ddpark2 <- joint_points_clean %>%
+  st_transform(3857) %>%
+  st_crop(ddv2buffer)
+
+ddp2 <- sample_results %>%
+  st_transform(3857) %>%
+  st_crop(ddv2buffer)
+  
+  
+# Current bbox dimensions
+desired_img_width <- ext["xmax"] - ext["xmin"]
+desired_img_height <- ext["ymax"] - ext["ymin"]
+current_width <- ext2["xmax"] - ext2["xmin"]
+current_height <- ext2["ymax"] - ext2["ymin"]
+current_aspect_ratio <- current_width / current_height
+
+# Desired dimensions and aspect ratio
+desired_aspect_ratio <- desired_img_width / desired_img_height
+
+# Adjust bbox width to match the desired aspect ratio
+if (current_aspect_ratio < desired_aspect_ratio) {
+  # Expand width (xmin and xmax) to match the aspect ratio
+  desired_width <- current_height * desired_aspect_ratio
+  width_diff <- desired_width - current_width
+  ext2["xmin"] <- ext2["xmin"] - width_diff / 2
+  ext2["xmax"] <- ext2["xmax"] + width_diff / 2
+} else {
+  # Expand height (ymin and ymax) to match the aspect ratio
+  desired_height <- current_width / desired_aspect_ratio
+  height_diff <- desired_height - current_height
+  ext2["ymin"] <- ext2["ymin"] - height_diff / 2
+  ext2["ymax"] <- ext2["ymax"] + height_diff / 2
+}
+
+streets_results[4,]
+ddpark2
+
+g2 <- basemap_ggplot(
+    ext = ext2,
+    map_service = "mapbox",
+    map_type = "light",
+    map_token = MAPBOX_TOKEN) + 
+  geom_sf(data = ddv2buffer,
+          fill = "blue",
+          aes(color = "Street Segments"),
+          linewidth = 0.01,
+          alpha = 0.3) +
+  geom_sf(data = ddv2,
+          aes(color = "Street Segments"),
+          size = 0.5) +
+  geom_sf(data = ddpark2,
+          aes(color = "Parking Spaces"),
+          size = 0.5) +  geom_sf(data = ddp2,
+          aes(color = "SVI PanoIDs"),
+          size = 2) +
+  coord_sf(expand = FALSE) +
+  geom_text() +
+  labs(
+    title = "SVI PanoIDs & Parking Spaces, Greyhound Street, Westminster",
+  ) +
+  # legend
+  scale_color_manual(values = c(
+    "Street Segments" = "blue",
+    "SVI PanoIDs" = "red",
+    "Parking Spaces" = "green"
+  )) +
+  # make legend appear
+  guides(color = guide_legend(title = "Data Type")) +
+  theme_void(base_size = 8) +
+  # legend bottom right
+  theme(legend.position.inside = c(0.05, 0.05),
+        legend.position = "inside",
+        legend.spacing = unit(0.03, "cm"),
+        legend.key.spacing = unit(0.03, "cm"),
+        plot.margin = margin(0.1, 0, 0, 0.01, "cm"),
+        plot.title = element_text(#family = "Arial",
+                                  size = 12,
+                                  vjust = 3,
+                                  hjust = 0.5),
+        legend.title = element_text(size = 10),
+    legend.justification = c(0, 0),  # Align legend inside bottom-left
+    legend.background = element_rect(fill = "white", color = "grey20", 
+                                     linewidth = (linewidth = 0.5) / .pt),
+    legend.margin = margin(5, 5, 5, 5)  # Small padding inside the legend box
+  )
+g2 
+ggsave(g2, filename = "./figs/example_streets.png", width = 7.5, dpi = 300)
+library(patchwork)
+
+g1 + g2
+ggsave("./figs/sample_streets_and_svis_large.png", width = 12, height = 6, dpi = 300)
+
+
+# look at a histogram of the lengths of sampled streets
+g3 <- ggplot(streets_results %>% filter(length<3000)) +
+  geom_histogram(aes(x = length),
+                 fill = "cornflowerblue",
+                 bins = 60) +
+  labs(
+    title = "Histogram of street lengths",
+    x = "Length (m)",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+        plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        text = element_text(#family = "Arial",
+                            size = 7.5),
+        plot.title = element_text(#family = "Arial",
+                                  size = 9,
+                                  # vjust = 3,
+                                  hjust = 0.5))
+g3
+ggsave("./figs/sample_street_lengths_hist.png", width = 3.25, height = 3, dpi = 300)
+
+# make a bar chart of which borough each sampled street is in
+ddb2 <- streets_results %>% filter(borough %in% regression_boroughs)
+g4 <- ggplot(ddb2) +
+  geom_bar(aes(x = borough,
+               fill = borough),
+           ) +
+  labs(
+    title = "Distribution of sampled streets by borough",
+    x = "Borough",
+    y = "Frequency"
+  ) +
+  coord_flip() +
+  theme_minimal(base_size = 7) +
+  theme(
+        legend.position = "none",
+        # rotate x-axis labels 45 degrees
+        # axis.text.x = element_text(angle = 45,
+        #                            hjust = 1),
+        plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        text = element_text(#family = "Arial",
+                            size = 7),
+        plot.title = element_text(#family = "Arial",
+                                  size = 8,
+                                  # vjust = 3,
+                                  hjust = 0.5))
+g4
+ggsave("./figs/sample_street_boroughs_bar.png", width = 3.25, height = 3, dpi = 300)
+
+# histogram of sample points by borough
+g5 <- ggplot(sample_street_panoids %>% filter(borough %in% regression_boroughs)) +
+  geom_bar(aes(x = borough,
+               fill = borough),
+           ) +
+  labs(
+    title = "Distribution of sampled SVI panoids by borough",
+    x = "Borough",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+        legend.position = "none",
+        # rotate x-axis labels 45 degrees
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        text = element_text(#family = "Arial",
+                            size = 7.5),
+        plot.title = element_text(#family = "Arial",
+                                  size = 9,
+                                  # vjust = 3,
+                                  hjust = 0.5))
+g5
+
+g4 + g5
+
+library(patchwork)
+g4 + g5
+ggsave("./figs/sample_street_panoids_boroughs_bar.png", width = 6.5, height = 3, dpi = 300)
+
+# bar chart of street types
+g6 <- ggplot(streets_results %>% filter(highway != "living_street")) +
+  geom_bar(aes(x = fct_infreq(highway),
+               fill = highway),
+           ) +
+  labs(
+    title = "Sampled streets by road type",
+    # I want subtitle to give total number of roads
+    x = "Type",
+    y = "Frequency"
+  ) +
+  theme_minimal(base_size = 7) +
+  theme(
+        legend.position = "none",
+        plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        text = element_text(#family = "Arial",
+                            size = 7.5),
+        plot.title = element_text(#family = "Sans",
+                                  size = 7,
+                                  # vjust = 3,
+                                  hjust = 0.5)) +
+  coord_flip()
+g6
+ggsave("./figs/sample_street_types_bar.png", width = 6.5, height = 2, dpi = 300)
+
+g4+g6
+ggsave("./figs/sample_streets_by_boroughs_and_types_bar.png", width = 6.5, height = 2, dpi = 300)
+
+
+
+
+```
+
+
+
+```{r}
+####### TESTING SAMPLING POINTS #########
+
+ddv <- sample_streets %>%
+  # transform crs to WGS 84
+  filter(name == "Frampton Road")
+
+ext = st_bbox(ddv)
+
+# find all images in ext
+ddp <- all_images_with_boroughs %>%
+  st_transform(st_crs(ddv)) %>%
+  st_crop(ext)
+
+# find distance between each panoid and line
+st_distance(ddp, ddv)
+
+dists <- st_distance(ddp, ddv) %>%
+  # change into numeric
+  as.numeric() %>%
+  as.data.frame() %>%
+  # arrange low to high
+  arrange(desc(`.`))
+dists
+
+ddv <- ddv %>%
+  st_transform(3857)
+
+ddp <- ddp %>%
+  st_transform(3857)
+
+ext <- st_bbox(ddv)
+
+ggplot() +
+  basemap_gglayer(
+    ext = st_transform(ext, 3857),
+    map_service = "osm",
+    map_type = "streets",
+    alpha = 0.2
+  ) +
+  scale_fill_identity() +
+  # Show the points in this bounding box
+  geom_sf(data = st_transform(ddp, 3857),
+          color = "red",
+          size = 0.5) +
+  geom_sf(data = ddv,
+          color = "blue") +
+  coord_sf() +
+  theme_void() +
+  theme(legend.position = "none")
+```
+
+```{r}
+### Now plot :
+# 1. the basemap
+# 2. the sampled street
+# 3. the parking spaces on that street
+# 4. the sampled panoids on that street
+
+# get the bounding box of the street
+
+rand = sample(1:nrow(sample_streets), 1)
+ddv <- sample_streets[rand, ]
+sf_use_s2(FALSE)
+ddv_bound <- ddv %>%
+  st_transform(27700) %>%
+  st_buffer(10, endCapStyle = "FLAT")
+sf_use_s2(TRUE)
+ddv_buff <- st_buffer(ddv, 25)
+ext <- st_bbox(ddv_buff)
+
+# find all img panoids in ext
+ddp <- all_images_with_boroughs %>%
+  st_transform(st_crs(ddv)) %>%
+  st_crop(ext)
+
+# joint points
+ddpoints <- joint_points_clean %>%
+  st_transform(st_crs(ddv)) %>%
+  st_make_valid() %>%
+  st_crop(ext)
+
+# joint polygons
+ddpolygons <- joint_polygons_clean %>%
+  st_transform(st_crs(ddv)) %>%
+  st_make_valid() %>%
+  st_crop(ext)
+
+# joint lines
+ddlines <- joint_polylines_clean %>%
+  st_transform(st_crs(ddv)) %>%
+  st_make_valid() %>%
+  st_crop(ext)
+
+
+# set all crs to 3857
+ddvt <- ddv %>%
+  st_transform(3857)
+ddv_bound_t <- ddv_bound %>%
+  st_transform(3857)
+ddv_buff_t <- ddv_buff %>%
+  st_transform(3857)
+ddpt <- ddp %>%
+  st_transform(3857)
+ddpointst <- ddpoints %>%
+  st_transform(3857)
+ddpolygonst <- ddpolygons %>%
+  st_transform(3857)
+ddlinest <- ddlines %>%
+  st_transform(3857)
+ext2 <- st_bbox(ddv_buff_t)
+
+basemap_ggplot(ext2) +
+  geom_sf(data = ddv_bound_t,
+          fill = "blue",
+          color = "blue",
+          alpha = 0.4) +
+  geom_sf(data = ddvt,
+          color = "blue",
+          linewidth = 2) +
+  geom_sf(data = ddpointst,
+          color = "red",
+          size = 2) +
+  geom_sf(data = ddpolygonst,
+          color = "red",
+          fill = "red",
+          linewidth = 0.25,
+          alpha = 0.5) +
+  geom_sf(data = ddlinest,
+          color = "red",
+          linewidth = 1.5,
+          size = 0.5) +
+  # panoids
+  geom_sf(data = ddpt,
+          color = "green",
+          size = 4) +
+  coord_sf() +
+  theme_void() +
+  theme(legend.position = "none")
+
+# find max dist between ddv and ddpolygons
+st_distance(ddv, ddpolygons) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and parking polygons is ", ., " m")
+st_distance(ddvt, ddpolygonst) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and transformed parking polygons is ", ., " m")
+st_distance(ddv, ddpoints) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and parking points is", ., "m")
+st_distance(ddvt, ddpointst) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and transformed parking points is ", ., " m")
+st_distance(ddv, ddlines) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and parking lines is ", ., " m")
+st_distance(ddvt, ddlinest) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and transformed parking lines is ", ., " m")
+st_distance(ddv, ddp) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and panoids is ", ., " m")
+st_distance(ddvt, ddpt) %>%
+  as.numeric() %>%
+  max() %>%
+  round(2) %>%
+  message("Max distance between street and transformed panoids is ", ., " m")
+  
+
+
+
+
+```
+  
+
+
+
+
+
+```{r}
+
+###### TESTING DATA ########
+# plot data streets where there are duplicate names
+dd <- data_streets %>%
+  mutate(name_and_borough = paste(name, borough)) %>%
+  # show entries for name_and_borough where there are more than 1 rows
+  group_by(name_and_borough) %>%
+  mutate(duplicate_count = n()) %>%
+  ungroup() 
+dd %>% filter(duplicate_count > 1) %>% nrow()
+dd %>% filter(duplicate_count > 1) %>% head()
+
+dd <- dd %>% filter(duplicate_count >1)
+
+# identify rows of dd where the name_and_borough is the same but geometry is different
+dd %>% filter(name_and_borough == "Abbott Road GB-TWH") %>% select(geometry) %>% st_as_text()
+
+dd2 <- dd %>%
+  mutate(is_geometry_unique = !duplicated(geometry, fromLast = TRUE) | !duplicated(geometry))
+
+dd2 %>% select(osm_id, name_and_borough, geometry, is_geometry_unique) %>% filter(is_geometry_unique == FALSE)
+ggplot(dd) +
+  geom_sf(aes(color = borough)) +
+  theme_minimal()
+
+ddv <- dd %>% filter(name_and_borough == "Abbott Road GB-TWH") %>%
+  # transform crs to WGS 84
+  st_transform(3857)
+
+ggplot() +
+  basemap_gglayer(
+    ext = st_bbox(ddv),  # Use the bounding box of the lines
+    map_service = "osm",
+    map_type = "streets"
+  ) +
+  scale_fill_identity() +
+  geom_sf(data = ddv, aes(color = osm_id)) +
+  geom_sf() +
+  coord_sf() +
+  theme(
+    legend.position = "none"
+  )
+
+library(leaflet)
+
+# number of unique highway values
+dd$highway %>% unique() %>% length()
+dd$highway %>% as.factor() %>% levels()
+# Create a color palette for the highway column
+palette(dd$highway)
+palette <- colorFactor(
+  palette = "Set3",  # Choose a color palette
+  domain = dd$highway  # Unique values in the highway column
+)
+
+?colorFactor
+
+leaflet(data = dd) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%  # Add a base map
+  addPolylines(
+    color = ~palette(highway),          # Color of the streets
+    weight = 1,               # Line thickness
+    opacity = 0.7,            # Line opacity
+    popup = ~paste(
+      "<b>Name:</b>", name, "<br>",
+      "<b>Borough:</b>", borough, "<br>",
+      "<b>Highway:</b>", highway
+    )                          # Add popups with street details
+  ) %>%
+  addLegend(
+    "bottomright",
+    pal = palette,
+    values = ~highway,
+    title = "Highway Types",
+    opacity = 1
+  ) %>%
+  setView(
+    lng = mean(st_coordinates(dd2)[, 1]),   # Center map on dataset
+    lat = mean(st_coordinates(dd2)[, 2]),
+    zoom = 12
+  )
+
+
+data_streets <- data_streets %>%
+  select(osm_id,
+         name,
+         alt_name,
+         borough,
+         highway,
+         maxspeed,
+         maxspeed:type,
+         oneway,
+         sidewalk,
+         sidewalk:both,
+         sidewalk:left,
+         sidewalk:right,
+         bridge,
+         tunnel,
+         geometry)
+
+# RANDOMLY CHOOSE 100 STREET SEGMENTS
+
+
+
+
+
+
+# Fn TO IDENTIFY THE NUMBER OF PARKING SPACES ON THAT STREET
+
+
+
+
+
+# Pull PANOIDs from STREET
+
+?getbb
+# TEST RUN
+bb <- getbb("Royal Borough of Kensington and Chelsea", 
+            format_out = 'polygon')
+bb_sf <- getbb("Royal Borough of Kensington and Chelsea", 
+            format_out = 'sf_polygon')
+
+bb2 <- getbb("Preston Capes",
+             format_out = 'polygon')
+bb2_sf <- getbb("Preston Capes",
+                format_out = 'sf_polygon')
+
+ggplot() +
+  geom_sf(data = bb2_sf)
+
+test_q <- opq(bb) %>%
+  add_osm_feature(key = 'highway') 
+test_x <- osmdata_sf(test_q) %>%
+  trim_osmdata(bb)
+
+test_x$osm_lines
+
+test_q2 <- opq(bb2) %>%
+  add_osm_feature(key = 'highway')
+test_x2 <- osmdata_sf(test_q2) %>%
+  trim_osmdata(bb2)
+
+ext = st_bbox(bb_sf)
+data = test_x$osm_lines
+
+ext <- st_transform(ext, crs = st_crs(3857))
+data = st_transform(data, crs = st_crs(3857))
+
+ggplot() +
+  basemap_gglayer(
+    ext = ext,  # Use the bounding box of the lines
+    map_service = "osm",
+    map_type = "streets"
+  ) +
+  scale_fill_identity() +
+  geom_sf(data = data, aes(color = highway), size = 0.5) +
+  coord_sf() +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+test_data <- test_x2$osm_lines
+test_x2$osm_points
+test_x2$osm_polygons
+
+?add_osm_feature
+test_q_2 <- opq(bb) %>%
+  add_osm_feature(key = 'highway', value = highway_values)
+test_x_2 <- osmdata_sf(test_q_2) %>%
+  trim_osmdata(bb)
+
+# IMPORT OSM LONDON STREET DATA
+test_x$osm_lines
+
+bb_data <- getbb("Camden", format_out = 'data.frame', featuretype = "city_district")
+bb_data
+
+# Filter for `addresstype == "city_district"`
+bb_district_line <- bb_data[bb_data$addresstype == "city_district", ]
+bb_district <- getbb(bb_city_district_line$name, format_out = 'polygon')
+
+```
+

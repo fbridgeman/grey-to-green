@@ -1,0 +1,43 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(lwgeom)
+library(sp)
+library(sf)
+library(ggplot2)
+#setseed(123)
+library(ggspatial)
+library(OpenStreetMap)
+library(osmdata)
+library(ggmap)
+library(basemaps)
+library(sf)
+library(ggnewscale)
+library(ggrepel)
+Sys.setenv(PROJ_LIB = "/Library/Frameworks/R.framework/Versions/4.3-arm64/Resources/library/sf/proj")
+```
+
+# Classes Table
+
+```{r}
+classes_init <- tibble(
+  ID = c(1:19)
+  original_class = c("moving car",
+            "moving light truck",
+            "moving heavy truck",
+            "moving bus",
+            "moving motorcycle",
+            "moving bicycle",
+  
+    
+            
+            
+    
+  )
+  
+)
+
+
+```

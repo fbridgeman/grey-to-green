@@ -1,0 +1,1255 @@
+---
+title: "Grey_To_Green_Data_Match"
+author: "Felix Bridgeman"
+date: "2024-10-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lwgeom)
+library(sp)
+library(sf)
+library(ggplot2)
+#setseed(123)
+```
+
+Import Point Data
+
+32 Boroughs of London + City of London in Alphabetical Order:
+- Barking & Dagenham
+- Barnet
+- Bexley
+- Brent
+- Bromley
+- Camden (points)
+- City of London (polygons)
+- Croydon
+- Ealing
+- Enfield
+- Greenwich
+- Hackney (polygons)
+- Hammersmith & Fulham
+- Haringey
+- Harrow (multipolygons)
+- Havering
+- Hillingdon
+- Hounslow (polylines)
+- Islington (polygons)
+- Kensington and Chelsea
+- Kingston upon Thames
+- Lambeth
+- Lewisham
+- Merton
+- Newham
+- Redbridge
+- Richmond upon Thames
+- Southwark
+- Sutton (multipolylines)
+- Tower Hamlets (polylines)
+- Waltham Forest
+- Wandsworth (multipolygons)
+- Westminster (points)
+
+
+# Importing Data
+
+Boroughs we have data on:
+- Camden
+- City of London
+- Hackney
+- Harrow
+- Islington
+- Sutton
+- Tower Hamlets
+- Wandsworth
+- Westminster
+
+## Borough (and Electoral Ward) Polygons
+
+```{r}
+# Import data
+borough_polygons <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)", layer = "london_borough_onstreet")
+
+```
+
+## Point Boroughs
+
+- Camden
+- Westminster
+- Kensington and Chelsea
+
+```{r}
+?read_sf
+?st_read
+# Import data
+# Camden
+camden <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Camden", layer = "Camden_NDVI")
+# Westminster
+westminster <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Westminster", layer = "Westminster_With NDVI")
+# Kensington and Chelsea
+kensington_and_chelsea <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Chelsea_Kensington/Buffered_NDVI.shp", layer = "Buffered_NDVI")
+
+```
+
+Camden:
+Geodetic CRS = WGS 84
+Westminster:
+Projected CRS = OSGB36 / British National Grid
+
+### Cleaning and merging point files
+
+```{r}
+
+# Check the structure of the data
+head(camden, 2)
+names(camden)
+# parking.sp is parking spaces
+head(westminster, 2)
+# for westminster all parking spaces are just 1
+
+# Equalise projections
+camden_transformed <- st_transform(camden, crs = st_crs(borough_polygons))
+ken_and_chel_transformed <- st_transform(kensington_and_chelsea, crs = st_crs(borough_polygons))
+westminster_transformed <- st_transform(westminster, crs = st_crs(borough_polygons))
+
+# Give IDs to Camden points according to ISO 3166-2:GB
+camden_transformed$ID <- paste0("CMD_", seq_along(camden_transformed$geometry))
+camden_transformed
+
+# Give IDs to Kensington and Chelsea points according to ISO 3166-2:GB
+# ken_and_chel_transformed$ID <- paste0("KEN_", seq_along(kensington_and_chelsea$geometry))
+# ken_and_chel_transformed
+
+# Standardize IDs for Westminster points
+westminster_transformed$ID <- paste0("WSM_", seq_along(westminster$geometry))
+
+# Make clean files for Camden and Westminster
+# Camden: Keep ID, GSS_CODE, and Geometry
+camden_clean <- camden_transformed %>%
+  select(ID, GSS_CODE, Parking.Sp, geometry) %>%
+  mutate(borough = "camden") %>%
+  # Rename parking.sp to parking_spaces
+  rename(parking_spaces = "Parking.Sp")
+
+# # Kensington and Chelsea: Keep ID, GSS_CODE, and Geometry
+# ken_and_chel_clean <- ken_and_chel_transformed %>%
+#   select(ID, GSS_CODE, No_of_Bays, geometry) %>%
+#   mutate(borough = "kensington_and_chelsea") %>%
+#   # Rename parking.sp to parking_spaces
+#   rename(parking_spaces = "No_of_Bays")
+
+# Westminster: Keep ID, GSS_CODE, and Geometry
+westminster_clean <- westminster_transformed %>%
+  select(ID, GSS_CODE, geometry) %>%
+  mutate(borough = "westminster") %>%
+  # Add a column for parking_spaces
+  mutate(parking_spaces = 1)
+
+# Merge points
+# ken_and_chel_clean
+joint_points <- rbind(camden_clean, westminster_clean)
+
+# Save the cleaned data to individual shapefiles
+st_write(camden_clean, "./clean_data/camden_clean.shp", append = FALSE)
+
+# # Save the cleaned Kensington and Chelsea data to a shapefile
+# st_write(ken_and_chel_clean, "./clean_data/kensington_and_chelsea_clean.shp", append = FALSE)
+
+# Save the cleaned Westminster data to a shapefile
+st_write(westminster_clean, "./clean_data/westminster_clean.shp", append = FALSE)
+
+# Filter out rows with empty geometry in joint_points
+joint_points_clean <- joint_points %>%
+  mutate(parking_spaces = as.numeric(parking_spaces))  %>% # make sure not char
+  filter(!st_is_empty(geometry)) 
+  
+# Verify if there are still any empty geometries
+sum(st_is_empty(joint_points_clean$geometry))  # This should return 0
+
+# Save the cleaned joint_points dataset to a shapefile
+st_write(joint_points_clean, "./clean_data/joint_points_clean.shp", append = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Polygon Boroughs
+
+- City of London
+- Hackney
+- Harrow
+- Islington
+- Wandsworth
+
+```{r}
+# Import data
+# City of London
+city_of_london <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/City of London", layer = "City of London_Merged")
+# Number_of_ is the number of parking spaces
+
+# Hackney
+hackney <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Hackney", layer = "Hackney polygons")
+# no_of_spac is the number of parking spaces
+
+# Harrow
+harrow <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Harrow_Parking_Bays[91]", layer = "All_Bays_New_Final", promote_to_multi = FALSE)
+harrow <- st_cast(harrow, "POLYGON")
+# NO_SPACES is the number of parking spaces
+
+# Islington
+islington <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Islington/Islington parking data.gpkg", layer = "Parking bays", promote_to_multi = FALSE)
+islington <- st_cast(islington, "POLYGON")
+# Spaces is the number of parking spaces
+
+# Wandsworth
+wandsworth <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Wandsworth", layer = "Parking Bays", promote_to_multi = FALSE)
+wandsworth <- st_cast(wandsworth, "POLYGON")
+# No number of parking spaces column
+
+# Transform
+city_of_london_transformed <- st_transform(city_of_london, crs = st_crs(borough_polygons))
+hackney_transformed <- st_transform(hackney, crs = st_crs(borough_polygons))
+harrow_transformed <- st_transform(harrow, crs = st_crs(borough_polygons)) 
+islington_transformed <- st_transform(islington, crs = st_crs(borough_polygons))
+wandsworth_transformed <- st_transform(wandsworth, crs = st_crs(borough_polygons))
+
+# Give IDs
+city_of_london_transformed$ID <- paste0("LND_", seq_along(city_of_london_transformed$geometry))
+hackney_transformed$ID <- paste0("HCK_", seq_along(hackney_transformed$geometry))
+harrow_transformed$ID <- paste0("HRW_", seq_along(harrow_transformed$geometry))
+islington_transformed$ID <- paste0("ISL_", seq_along(islington_transformed$geometry))
+wandsworth_transformed$ID <- paste0("WND_", seq_along(wandsworth_transformed$geometry))
+
+# Clean
+# City of London: Keep ID, geometry
+city_of_london_clean <- city_of_london_transformed %>%
+  select(ID, 
+         Number_of_,
+         geometry) %>%
+  mutate(borough = "city_of_london") %>%
+  rename(parking_spaces = "Number_of_")
+
+# Hackney: Keep ID, geometry
+hackney_clean <- hackney_transformed %>%
+  select(ID,
+         no_of_spac,
+         geometry) %>%
+  mutate(borough = "hackney") %>%
+  rename(parking_spaces = "no_of_spac")
+
+# Harrow: Keep ID, geometry
+harrow_clean <- harrow_transformed %>%
+  select(ID,
+         NO_SPACES,
+         geometry) %>%
+  mutate(borough = "harrow") %>%
+  rename(parking_spaces = "NO_SPACES")
+
+# Islington: Keep ID, geometry
+islington_clean <- islington_transformed %>%
+  select(ID,
+         #UniqueID,
+         Spaces,
+         geom) %>%
+  # rename geom geometry
+  rename(geometry = geom) %>%
+  mutate(borough = "islington") %>%
+  # Add a column for parking_spaces
+  rename(parking_spaces = "Spaces") #%>%
+  #rename(PMID = "UniqueID")
+
+# Wandsworth: Keep ID, geometry
+wandsworth_clean <- wandsworth_transformed %>%
+  select(ID, geometry) %>%
+  mutate(borough = "wandsworth") %>%
+  # Add a column for parking_spaces
+  mutate(parking_spaces = NA)
+
+
+# merge
+joint_polygons <- rbind(city_of_london_clean,
+                        hackney_clean,
+                        harrow_clean,
+                        islington_clean,
+                        wandsworth_clean) %>%
+  mutate(parking_spaces = as.numeric(parking_spaces)) %>% # make sure not char
+  # make valid to avoid problems down the line as seen during regression step
+  st_make_valid(geometry)
+
+# Filter out rows with empty geometry in joint_polygons
+joint_polygons_clean <- joint_polygons %>%
+  filter(!st_is_empty(geometry))
+
+# Verify if there are still any empty geometries
+sum(st_is_empty(joint_polygons_clean$geometry))  # This should return 0
+
+# Save the cleaned data to individual shapefiles
+st_write(city_of_london_clean, "./clean_data/city_of_london_clean.shp", append = FALSE)
+st_write(hackney_clean, "./clean_data/hackney_clean.shp", append = FALSE)
+st_write(harrow_clean, "./clean_data/harrow_clean.shp", append = FALSE)
+st_write(islington_clean, "./clean_data/islington_clean.shp", append = FALSE)
+st_write(wandsworth_clean, "./clean_data/wandsworth_clean.shp", append = FALSE)
+# Save the cleaned joint_polygons dataset to a shapefile
+st_write(joint_polygons_clean, "./clean_data/joint_polygons_clean.shp", append = FALSE)
+
+
+```
+
+## Polyline Boroughs
+
+- Hounslow
+- Sutton
+- Tower Hamlets
+
+```{r, fig.width = 20}
+# Import data
+# Hounslow
+hounslow <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Hounslow new (GIS from FOI)", layer = "All Confirmed Static Orders_polyline")
+hounslow <- st_zm(hounslow, drop = TRUE, what = "ZM")
+hounslow$Order_type %>% unique()
+# need to filter out the following Order_types:
+waiting_filter = c("No loading at any time", "No loading", "School Keep Clear Mandatory", "Limited waiting", "Red Route Clearway AAT", "Red Route Loading Bay", "No waiting", "No waiting at any time", "Loading only")
+
+# Sutton
+sutton <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Sutton data", layer = "Sutton_onstreet_lines", promote_to_multi = FALSE)
+sutton <- st_cast(sutton, "LINESTRING")
+sutton$order_type %>% unique()
+# need to filter out the following Order_types (capitalised)
+waiting_filter2 = c("No Waiting", "No Waiting At Any Time", "No Loading", "No Loading At Any Time", "Loading Places", "No Stopping on School Entrance Marking", "Limited Waiting Bayes", "Crossing", "Bus Stop and Stands")
+
+# Tower Hamlets
+tower_hamlets <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)/Boroughs Parking data/Tower Hamlets", layer = "All Confirmed Static Orders 2021-06-29_lines")
+tower_hamlets$Order_type %>% unique()
+
+# need to filter out the following Order_types:
+waiting_filter3 = c(
+  "No Waiting At Any Time",
+  "No Waiting",
+  "No Loading At Any Time",
+  "No Loading",
+  "Limited Waiting",
+  "Loading Place",
+  "No Stopping on School Entrance Markings",
+  "Bus Stop",
+  "Bus Stand",
+  "Pedestrian Crossing",
+  "Keep Clear Entrance Marking")
+
+# Transform
+hounslow_transformed <- st_transform(hounslow, crs = st_crs(borough_polygons))
+sutton_transformed <- st_transform(sutton, crs = st_crs(borough_polygons))
+tower_hamlets_transformed <- st_transform(tower_hamlets, crs = st_crs(borough_polygons))
+
+# Give IDs
+hounslow_transformed$ID <- paste0("HNS_", seq_along(hounslow_transformed$geometry))
+sutton_transformed$ID <- paste0("STN_", seq_along(sutton_transformed$geometry))
+tower_hamlets_transformed$ID <- paste0("TWH_", seq_along(tower_hamlets_transformed$geometry))
+
+# Clean
+# Hounslow: Keep ID, geometry
+hounslow_clean <- hounslow_transformed %>%
+  # Filter Order_type 
+  filter(!Order_type %in% waiting_filter) %>%
+  mutate(length = st_length(geometry)) %>%
+  mutate(parking_spaces = round(length / 4.8, 0)) %>%
+  # as integer
+  mutate(parking_spaces = as.integer(parking_spaces)) %>%
+  select(ID, PMID, parking_spaces, geometry) %>%
+  mutate(borough = "hounslow")
+
+sum(hounslow_clean$parking_spaces)
+
+# Sutton: Keep ID, geometry
+sutton_clean <- sutton_transformed %>%
+  filter(!order_type %in% waiting_filter2) %>%
+  mutate(length = st_length(geometry)) %>%
+  mutate(parking_spaces = round(length / 4.8, 0)) %>%
+  # as integer
+  mutate(parking_spaces = as.integer(parking_spaces)) %>%
+  select(ID, pmid, parking_spaces, geometry) %>%
+  mutate(borough = "sutton") %>%
+  rename(PMID = "pmid")
+
+# Tower Hamlets: Keep ID, geometry
+tower_hamlets_clean <- tower_hamlets_transformed %>%
+  filter(!Order_type %in% waiting_filter3) %>%
+  mutate(length = st_length(geometry)) %>%
+  mutate(parking_spaces = round(length / 4.8, 0)) %>%
+  # as integer
+  mutate(parking_spaces = as.integer(parking_spaces)) %>%
+  select(ID, PMID, parking_spaces, geometry) %>%
+  mutate(borough = "tower_hamlets")
+
+# merge
+joint_polylines <- rbind(hounslow_clean, sutton_clean, tower_hamlets_clean) %>%
+  mutate(parking_spaces = as.numeric(parking_spaces)) # make sure not char
+
+# Filter out rows with empty geometry in joint_polylines
+joint_polylines_clean <- joint_polylines %>%
+  filter(!st_is_empty(geometry))
+
+# Verify if there are any empty geometries
+sum(st_is_empty(joint_polylines_clean$geometry))  # This should return 0
+
+# save the cleaned data to individual shapefiles
+st_write(hounslow_clean, "./clean_data/hounslow_clean.shp", append = FALSE)
+st_write(sutton_clean, "./clean_data/sutton_clean.shp", append = FALSE)
+st_write(tower_hamlets_clean, "./clean_data/tower_hamlets_clean.shp", append = FALSE)
+# Save the cleaned joint_polylines_clean dataset to a shapefile
+st_write(joint_polylines_clean, "./clean_data/joint_polylines_clean.shp", append = FALSE)
+joint_polylines_clean
+```
+
+## Photos from Google StreetView
+
+```{r}
+# Import data
+all_images <- st_read(dsn = "../raw_london/images", layer = "imgDF_subset")
+
+# How many panoids?
+nrow(all_images)
+
+# Transform projection
+all_images_transformed <- st_transform(all_images, crs = st_crs(borough_polygons))
+
+# Check CRS of both objects is ok
+st_crs(borough_polygons) == st_crs(all_images_transformed)
+
+# Assign boroughs to every panoid for reference later
+all_images_with_boroughs <- st_join(all_images_transformed, borough_polygons["NAME"])
+
+# rename the NAME column `borough`
+all_images_with_boroughs <- all_images_with_boroughs %>%
+  rename(borough = NAME)
+
+```
+
+
+# Run Spatial Analysis
+
+```{r}
+# create a buffer object
+buffer <- 1
+
+# create a buffer around the points
+joint_points_buffer <- st_buffer(joint_points_clean, dist = 5) %>%
+  select(-GSS_CODE) %>%
+  mutate(original_shape = "point")
+
+# create a buffer around the polygons
+joint_polygons_buffer <- st_buffer(joint_polygons_clean, dist = 2) %>%
+  mutate(original_shape = "polygon")
+
+# create a buffer around the polylines
+joint_polylines_buffer <- st_buffer(joint_polylines_clean, dist = 2) %>%
+  mutate(original_shape = "polyline")
+
+# inspect all buffers
+head(joint_points_buffer)
+head(joint_polygons_buffer)
+head(joint_polylines_buffer)
+
+# merge buffers
+all_buffers <- rbind(joint_points_buffer, joint_polygons_buffer, joint_polylines_buffer)
+all_buffers
+# calculate total area of all buffers
+total_buffer_area <- sum(st_area(all_buffers))
+
+# - Camden
+# - City of London
+# - Hackney
+# - Harrow
+# - Islington
+# - Sutton
+# - Tower Hamlets
+# - Wandsworth
+# - Westminster
+
+# calculate total area in covered boroughs
+selected_borough_polygons <- borough_polygons %>%
+  filter(NAME %in% c("Camden",
+                     "City of London",
+                     "Hackney",
+                     "Harrow",
+                     "Hounslow",
+                     "Islington",
+                     "Sutton",
+                     "Tower Hamlets",
+                     "Wandsworth",
+                     "Westminster"))
+
+# calculate total area of selected boroughs
+selected_borough_area <- sum(st_area(selected_borough_polygons))
+
+# calculate total area of all boroughs
+total_borough_area <- sum(st_area(borough_polygons))
+
+# calculate the percentage of the total area covered by the selected boroughs
+selected_borough_area / total_borough_area
+
+# calculate the percentage of the total area covered by the buffers
+total_buffer_area / total_borough_area
+
+# calculate the percentage of the total area covered by the buffers in the selected boroughs
+total_buffer_area / selected_borough_area
+
+# identify the panoids in the selected boroughs
+images_in_selected_boroughs <- all_images_with_boroughs %>%
+  filter(borough %in% c("Camden",
+                        "City of London",
+                        "Hackney",
+                        "Harrow",
+                        "Hounslow",
+                        "Islington",
+                        "Sutton",
+                        "Tower Hamlets",
+                        "Wandsworth",
+                        "Westminster"))
+
+# images_in_inner_boroughs <- all_images_with_boroughs %>%
+#   filter(borough %in% c("Camden",
+#                         "Hackney",
+#                         "Islington",
+#                         "Westminster"))
+
+# identify the panoids that fall inside the buffers
+images_in_buffer_area <- st_within(all_images_with_boroughs, all_buffers)
+points_inside_buffer_area <- lengths(images_in_buffer_area) > 0
+images_in_buffer_area <- all_images_with_boroughs[points_inside_buffer_area, ]
+
+# identify the panoids that fall outside the buffers
+images_outside_buffer_area <- images_in_selected_boroughs %>%
+  filter(!(panoid %in% images_in_buffer_area$panoid))
+
+inner_images_outside_buffer <- images_outside_buffer_area %>%
+  filter(borough %in% c("Camden",
+                        "Hackney",
+                        "Islington",
+                        "Westminster"))
+  
+# create a buffer around the points
+joint_points_buffer2 <- st_buffer(joint_points_clean, dist = 10) %>%
+  select(-GSS_CODE) %>%
+  mutate(original_shape = "point")
+
+# create a buffer around the polygons
+joint_polygons_buffer2 <- st_buffer(joint_polygons_clean, dist = 10) %>%
+  mutate(original_shape = "polygon")
+
+# create a buffer around the polylines
+joint_polylines_buffer2 <- st_buffer(joint_polylines_clean, dist = 10) %>%
+  mutate(original_shape = "polyline")
+
+all_buffers2 <- rbind(joint_points_buffer2, joint_polygons_buffer2, joint_polylines_buffer2)
+
+# identify panoids that fall far from buffers
+inside_not_far <- st_within(images_in_selected_boroughs, all_buffers2)
+points_not_far <- lengths(inside_not_far) > 0
+images_far_outside_buffer_area <- images_in_selected_boroughs[!points_not_far, ]
+
+# calculate the percentage of images that are in the selected boroughs
+nrow(images_in_selected_boroughs) / nrow(all_images_with_boroughs)
+
+# calculate the percentage of images in the buffer area out of the total area
+nrow(images_in_buffer_area) / nrow(all_images_with_boroughs)
+
+# calculate the percentage of images in the buffer area out of the selected boroughs
+nrow(images_in_buffer_area) / nrow(images_in_selected_boroughs)
+
+#
+
+#
+
+#
+
+# calculate percentage of images that were in buffer area by borough
+# first create a borough df
+test_boroughs <- c("Camden",
+              "City of London",
+              "Hackney",
+              "Harrow",
+              "Hounslow",
+              "Islington",
+              "Sutton",
+              "Tower Hamlets",
+              "Wandsworth",
+              "Westminster")
+
+test_boroughs <- as.data.frame(test_boroughs)
+# label first column NAME
+colnames(test_boroughs) <- c("NAME")
+#lowercase id
+test_boroughs$id <- c("camden",
+                        "city_of_london",
+                        "hackney",
+                        "harrow",
+                        "hounslow",
+                        "islington",
+                        "sutton",
+                        "tower_hamlets",
+                        "wandsworth",
+                        "westminster")
+
+# now let's fill the df with its area, its images and its images in buffer
+test_boroughs$area <- NA
+test_boroughs$images <- NA
+test_boroughs$images_in_buffer <- NA
+test_boroughs$images_outside_buffer <- NA
+
+
+# fill original_shape manually
+test_boroughs <- test_boroughs %>%
+  mutate(original_shape = case_when(
+    NAME == "Camden" ~ "point",
+    NAME == "City of London" ~ "polygon",
+    NAME == "Hackney" ~ "polygon",
+    NAME == "Harrow" ~ "polygon",
+    NAME == "Hounslow" ~ "polyline",
+    NAME == "Islington" ~ "polygon",
+    NAME == "Sutton" ~ "polyline",
+    NAME == "Tower Hamlets" ~ "polyline",
+    NAME == "Wandsworth" ~ "polygon",
+    NAME == "Westminster" ~ "point"
+  )
+  )
+
+
+# Check the result
+head(test_boroughs)
+    
+# fill the area
+for (i in 1:nrow(test_boroughs)) {
+  test_boroughs$area[i] <- sum(st_area(borough_polygons[borough_polygons$NAME == test_boroughs$NAME[i], ]))
+}
+
+# fill the buffer area
+for (i in 1:nrow(test_boroughs)) {
+  test_boroughs$buffer_area[i] <- sum(st_area(all_buffers[all_buffers$borough == test_boroughs$id[i], ]))
+}
+
+# fill the images
+for (i in 1:nrow(test_boroughs)) {
+  test_boroughs$images[i] <- nrow(all_images_with_boroughs[all_images_with_boroughs$borough == test_boroughs$NAME[i], ])
+}
+
+# fill the images in buffer
+for (i in 1:nrow(test_boroughs)) {
+  test_boroughs$images_in_buffer[i] <- nrow(images_in_buffer_area[images_in_buffer_area$borough == test_boroughs$NAME[i], ])
+}
+
+# fill the images out of buffer
+for (i in 1:nrow(test_boroughs)) {
+  test_boroughs$images_outside_buffer[i] <- nrow(images_outside_buffer_area[images_outside_buffer_area$borough == test_boroughs$NAME[i], ])
+}
+
+test_boroughs
+
+test_boroughs$percentage_of_images_in_buffer <- test_boroughs$images_in_buffer / test_boroughs$images
+
+# plot total number of images relative to borough area
+test_boroughs %>%
+  ggplot(aes(x = NAME,
+             y = images/area,
+             fill = original_shape)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Number of images relative to borough area",
+       x = "Borough",
+       y = "Number of images",
+       fill = "Original shape")
+
+# plot by borough
+g_borough_prop <- test_boroughs %>%
+  ggplot(aes(x = NAME,
+                          y = images_in_buffer/images * 100,
+                          fill = original_shape)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  # 0-100 axis
+  scale_y_continuous(limits = c(0, 100)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Percentage of images in buffer area by borough",
+       x = "Shape",
+       y = "Percentage of images in buffer area (%)",
+       fill = "Original shape")
+
+# plot by original shape
+g_shape_prop <-
+test_boroughs %>%
+  group_by(original_shape) %>%
+  summarise(images_in_buffer = sum(images_in_buffer),
+            images = sum(images)) %>%
+  ggplot(aes(x = original_shape,
+                          y = images_in_buffer/images * 100,
+                          fill = original_shape)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  # 0-100 axis
+  scale_y_continuous(limits = c(0, 100)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Percentage of images in buffer area by original shape type",
+       x = "Shape",
+       y = "Percentage of images in buffer area (%)",
+       fill = "Original shape")
+
+ggsave(g_borough_prop, width = 6, height = 4, units = "in", filename = "./img/borough_prop.png")
+ggsave(g_shape_prop, width = 6, height = 4, units = "in", filename = "./img/shape_prop.png")
+```
+
+# Run new spatial analysis
+
+- Use 5 m buffer for points
+- Use 2 m buffer for polygons
+- Use 2 m buffer for polylines
+
+# Visualizations
+
+```{r, fig.width = 10}
+# All points, polygons and polylines on a map
+g_clean_spaces <- ggplot() +
+  geom_sf(data = borough_polygons, color = 'lightgrey', size = 1) +
+  geom_sf(data = joint_points_clean, aes(color = borough), size = 0.0001, shape = 20) +
+  geom_sf(data = joint_polygons_clean, aes(color = borough), size = 0.1) +
+  geom_sf(data = joint_polylines_clean, aes(color = borough), size = 0.1) +
+  theme_minimal() +
+  labs(title = "All Clean On-Street Parking Data") +
+  theme(legend.position = "none") +
+  geom_sf_text(data = borough_polygons, aes(label = NAME), size = 1.5, nudge_y = 0.0005, nudge_x = 0.0005)
+
+g_clean_spaces
+ggsave(g_clean_spaces, width = 10, height = 7.5, units = "in", dpi = 600, filename = "./img/clean_spaces.png")
+ggsave(g_clean_spaces, width = 10, height = 7.5, units = "in", dpi = 600, filename = "./img/clean_spaces.jpg")
+
+# Plot point buffers
+g_buffers <- ggplot() +
+  
+  # Plot the buffer polygons (joint_points_buffer)
+  geom_sf(data = all_buffers, fill = "lightblue", color = "blue", alpha = 0.3)
+
+  # Add titles and labels
+  labs(
+    title = "Buffer Polygons",
+    x = "Longitude", y = "Latitude"
+  ) +
+  theme_minimal()
+g_buffers
+
+# plot which images lack borough assignments
+all_images_with_boroughs %>%
+  ggplot() +
+  geom_sf(size = 0.01) +
+  geom_sf(data = . %>% filter(is.na(borough)), color = "red", size = 0.01) +
+  labs(title = "Images without boroughs") +
+  theme_minimal()
+
+# plot `images_in_buffer_area` on top of the `all_buffers`
+# color `all_buffers` by `original_shape`
+ggplot() +
+  geom_sf(data = all_buffers,
+          aes(fill = original_shape, color = original_shape),
+          size = 0.1) +
+  geom_sf(data = images_in_buffer_area,
+          color = "red",
+          size = 0.1) +
+  labs(title = "Images in buffer area") +
+  theme_minimal()
+
+# plot `images_outside_buffer_area` on top of the `all_buffers`
+# color `all_buffers` by `original_shape`
+ggplot() +
+  geom_sf(data = all_buffers,
+          aes(fill = original_shape, color = original_shape),
+          size = 0.1) +
+  geom_sf(data = images_outside_buffer_area,
+          color = "red",
+          size = 0.1) +
+  labs(title = "Images outside buffer area") +
+  theme_minimal()
+
+# plot `images_far_outside_buffer_area` on top of the `all_buffers`
+# color `all_buffers` by `original_shape`
+ggplot() +
+  # basemap of London
+  geom_sf(data = borough_polygons, color = 'lightgrey', size = 1) +
+  # all buffers
+  geom_sf(data = all_buffers,
+          aes(fill = original_shape, color = original_shape),
+          size = 0.1,
+          alpha = 0.5) +
+  # images outside buffer area
+  geom_sf(data = images_far_outside_buffer_area,
+          color = "red",
+          size = 0.1) +
+  labs(title = "Images far outside buffer area") +
+  theme_minimal()
+
+# map all images in city of london and with all selected images on top
+# first map the polygon for city of london
+all_images_with_boroughs %>% filter(borough == "City of London")
+
+
+```
+
+### List of Images IN and OUT and FAR OUT of Buffer Area
+
+```{r}
+#save as shp
+st_write(images_in_buffer_area, "./results/images_near_parking.shp")
+st_write(images_outside_buffer_area, "./results/images_outside_parking.shp")
+st_write(images_far_outside_buffer_area, "./results/images_far_outside_parking.shp")
+st_write(inner_images_outside_buffer, "./results/innerlondon_images_outside_parking.shp")
+# set seed
+set.seed(123)
+
+# random sample of these images, n = 200
+images_in_buffer_area_sample <- images_in_buffer_area %>%
+  sample_n(200)
+images_outside_buffer_area_sample <- images_outside_buffer_area %>%
+  sample_n(200)
+images_far_outside_buffer_area_sample <- images_far_outside_buffer_area %>%
+  sample_n(200)
+
+inner_images_outside_buffer_sample <- inner_images_outside_buffer %>%
+  sample_n(400)
+
+st_write(images_in_buffer_area_sample, "./results/images_near_parking_sample200.shp")
+st_write(images_outside_buffer_area_sample, "./results/images_outside_parking_sample200.shp")
+st_write(images_far_outside_buffer_area_sample, "./results/images_far_outside_parking_sample200.shp")
+st_write(inner_images_outside_buffer_sample, "./results/innerlondon_images_outside_parking_sample400.shp")
+```
+
+### Download images
+
+```{r}
+# create the folder if it doesn't exist
+# dir.create("./collected_images", showWarnings = FALSE)
+
+# load panoids csv
+# selected_panoids <- read.csv("./panoids/london-panoid_fileInfo-roboflow.csv")
+# selected_panoids <- selected_panoids %>%
+#   # grep delete everything before the third "/"
+#   mutate(location = gsub(".*?/.*?/.*?/(.*)", "\\1", folder)) %>%
+#   mutate(old_pathname = paste0("/", location, "/", name)) %>%
+#   mutate(new_pathname = paste0("./collected_images/", name))
+# 
+# # save each image using "pathname" to a folder called "collected images" in current directory
+# file.copy(selected_panoids$old_pathname, "./collected_images", overwrite = FALSE)
+```
+
+
+### Extract Panoids and Filenames
+
+```{r}
+# This script finds the panoids paths used for labeling parked vs moving vehicles in Roboflow. 
+
+inside_gdf <- images_in_buffer_area_sample %>%
+  select(panoid)
+
+outside_gdf <- images_outside_buffer_area_sample %>%
+  select(panoid)
+
+far_outside_gdf <- images_far_outside_buffer_area_sample %>%
+  select(panoid)
+
+innerlondon_outside_gdf <- inner_images_outside_buffer_sample %>%
+  select(panoid)
+
+# Load the CSV file
+csv_path <- "2024-09-15 14_44_20.478681_fileInfo.csv"
+csv_df <- read.csv(csv_path, stringsAsFactors = FALSE)
+
+# Extract the 'panoid' by removing everything after the last underscore and .jpg
+csv_df <- csv_df %>%
+  mutate(panoid = str_extract(name, ".*(?=_)"))
+
+# Filter the CSV data to keep only rows where the 'panoid' is present in the shapefile panoids
+inside_filtered_csv_df <- csv_df %>%
+  filter(panoid %in% inside_gdf$panoid)
+
+outside_filtered_csv_df <- csv_df %>%
+  filter(panoid %in% outside_gdf$panoid)
+
+far_outside_filtered_csv_df <- csv_df %>%
+  filter(panoid %in% far_outside_gdf$panoid)
+
+innerlondon_outside_filtered_csv_df <- csv_df %>%
+  filter(panoid %in% innerlondon_outside_gdf$panoid)
+
+# Display the filtered paths that correspond to the panoids in the shapefile
+inside_filtered_csv_df <- inside_filtered_csv_df %>%
+  select(folder, name, type)
+
+outside_filtered_csv_df <- outside_filtered_csv_df %>%
+  select(folder, name, type)
+
+far_outside_filtered_csv_df <- far_outside_filtered_csv_df %>%
+  select(folder, name, type)
+
+innerlondon_outside_filtered_csv_df <- innerlondon_outside_filtered_csv_df %>%
+  select(folder, name, type)
+
+# merged_filtered_csv_df <- rbind(inside_filtered_csv_df, outside_filtered_csv_df)
+
+inside_output_path <- "./results/near_parking_london-panoid_fileInfo-roboflow.csv"
+outside_output_path <- "./results/outside_parking_london-panoid_fileInfo-roboflow.csv"
+far_outside_output_path <- "./results/far_outside_parking_london-panoid_fileInfo-roboflow.csv"
+innerlondon_outside_output_path <- "./results/innerlondon_outside_parking-panoid_fileInfo-roboflow.csv"
+# merged_output_path <- "./results/london-panoid_fileInfo-roboflow.csv"
+
+write.csv(inside_filtered_csv_df, inside_output_path, row.names = FALSE)
+write.csv(outside_filtered_csv_df, outside_output_path, row.names = FALSE)
+write.csv(far_outside_filtered_csv_df, far_outside_output_path, row.names = FALSE)
+write.csv(innerlondon_outside_filtered_csv_df, innerlondon_outside_output_path, row.names = FALSE)
+
+# original_selected_panoids$panoid == inside_selected_panoids$panoid
+# compare the two dataframes
+# original_selected_panoids <- read.csv("./panoids/london-panoid_fileInfo-roboflow.csv")
+# original_selected_panoids$panoid == inside_selected_panoids$panoid
+```
+
+### Gaining an Additional Sample of Images far From Parked Cars
+
+```{r}
+images_far_outside_buffer_area_sample <- images_far_outside_buffer_area %>%
+  sample_n(300) %>%
+  
+```
+
+## Visualisations for Report
+
+```{r}
+borough_polygons <- st_read(dsn = "../raw_london/On-street parking/On-street parking (Alex)", layer = "london_borough_onstreet")
+original_boroughs = c("Camden",
+                  "City of London",
+                  "Hackney",
+                  "Harrow",
+                  "Hounslow",
+                  "Islington",
+                  "Kensington and Chelsea",
+                  "Sutton",
+                  "Tower Hamlets",
+                  "Wandsworth",
+                  "Westminster")
+sampling_boroughs = c("Camden",
+                  "Hackney",
+                  "Harrow",
+                  "Hounslow",
+                  "Islington",
+                  "Sutton",
+                  "Tower Hamlets",
+                  "Wandsworth",
+                  "Westminster")
+regression_boroughs = c("Camden",
+                        "Islington",
+                        "Hackney",
+                        #"Kensington and Chelsea",
+                        "Westminster")
+inner_boroughs = c("Camden",
+                   "City of London",
+                   "Greenwich",
+                   "Hackney",
+                   "Hammersmith and Fulham",
+                   "Islington",
+                   "Kensington and Chelsea",
+                   "Lambeth",
+                   "Lewisham",
+                   "Southwark",
+                   "Tower Hamlets",
+                   "Wandsworth",
+                   "Westminster")
+
+borough_num <- data.frame(NUM = c(1:33), NAME = c("City of London", "Westminster", "Kensington and Chelsea", "Hammersmith and Fulham", "Wandsworth", "Lambeth", "Southwark", "Tower Hamlets", "Hackney", "Islington", "Camden", "Brent", "Ealing", "Hounslow", "Richmond upon Thames", "Kingston upon Thames", "Merton", "Sutton", "Croydon", "Bromley", "Lewisham", "Greenwich", "Bexley", "Havering", "Barking and Dagenham", "Redbridge", "Newham", "Waltham Forest", "Haringey", "Enfield", "Barnet", "Harrow", "Hillingdon"))
+
+cand_num <- data.frame(CAND_NUM = c(1:9),
+                       NAME = c("Camden",
+                  "Hackney",
+                  "Harrow",
+                  "Hounslow",
+                  "Islington",
+                  "Sutton",
+                  "Tower Hamlets",
+                  "Wandsworth",
+                  "Westminster"))
+regression_num <- data.frame(REGRESS_NUM = c(1:4),
+                             NAME = c("Hackney",
+                                      "Islington",
+                                      "Camden",
+                                      "Westminster"
+                                      #"Kensington and Chelsea"
+                                      ))
+
+# Add num to `borough_polygons`
+borough_polygons <- borough_polygons %>%
+  left_join(borough_num, by = "NAME")
+borough_polygons <- borough_polygons %>%
+  left_join(cand_num, by = "NAME")
+borough_polygons <- borough_polygons %>%
+  left_join(regression_num, by = "NAME")
+
+borough_polygons <- borough_polygons %>%
+  mutate(original_source = NAME %in% original_boroughs) %>%
+  mutate(sampling_source = NAME %in% sampling_boroughs) %>%
+  mutate(regression_source = NAME %in% regression_boroughs) %>%
+  mutate(inner = NAME %in% inner_boroughs)
+         
+inner_london_polygons <- borough_polygons %>%
+  filter(inner == TRUE)
+sampling_borough_polygons <- borough_polygons %>%
+  filter(sampling_source == TRUE)
+regression_borough_polygons <- borough_polygons %>%
+  filter(regression_source == TRUE)
+
+# Displaying Polygons of Candidate Boroughs
+library(ggspatial)
+library(OpenStreetMap)
+library(osmdata)
+library(ggmap)
+library(basemaps)
+library(sf)
+library(ggnewscale)
+library(ggrepel)
+```
+
+```{r, fig.width = 6.5, fig.height = 4.5}
+borough_polygons_draw <- st_transform(borough_polygons, crs = 3857)  # Web Mercator for compatibility
+inner_london_polygons_draw <- st_transform(inner_london_polygons, crs = 3857)  # Web Mercator for compatibility
+sampling_borough_polygons_draw <- st_transform(sampled_borough_polygons, crs = 3857)  # Web Mercator for compatibility
+
+# Merge all borough polygons for a london polygon
+london_polygon_draw <- st_union(borough_polygons_draw)
+inner_london_draw <- st_union(inner_london_polygons_draw)
+
+extent <- st_bbox(london_polygon_draw, crs = 3857)
+
+get_maptypes()
+
+# Create the plot
+g_data_cand_all = ggplot() +
+  # Add basemap
+  basemap_gglayer(
+    ext = london_polygon_draw,
+    map_service = "carto",
+    map_type = "light_no_labels",  # Or any basemap type you prefer
+  ) +
+  scale_fill_identity() + 
+  # Add a new scale for the polygons
+  new_scale_fill() +
+  # Add borough polygons with independent fill
+  geom_sf(data = borough_polygons_draw,
+          aes(fill = original_source),
+          inherit.aes = FALSE,
+          alpha = 0.5,
+          linewidth = 0.1) +
+  # geom_sf(data = inner_london_draw,
+  #         inherit.aes = FALSE,
+  #         alpha = 0,
+  #         linewidth = 0.5) +
+  # Add labels for borough polygons
+  geom_sf_text(data = (borough_polygons_draw),
+                aes(label = NUM,
+                geometry = geometry),
+                stat = "sf_coordinates",
+                inherit.aes = FALSE,
+                # bold
+                # fontface = "bold",
+                min.segment.length = 0.5,
+                segment.size = 0.1,
+                box.padding = 0.1,
+                direction = "y",
+                size = 2) +
+  
+  # Define fill colors for borough polygons
+  scale_fill_manual(values = c("TRUE" = "lightgreen", "FALSE" = "grey")) +
+  
+  # Add a scale bar
+  annotation_scale(location = "bl",
+                   pad_x = unit(.25, "cm"),
+                   pad_y = unit(.25, "cm"),
+                   width_hint = 0.2) +
+  coord_sf(expand = FALSE) +
+  # Add title and theme
+  labs(title = "Candidate Boroughs for Analysis",
+       legend = "Original Data Source") +
+  theme_void() +
+  theme(plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        plot.title = element_text(family = "Arial",
+                                  size = 9,
+                                  vjust = 3,
+                                  hjust = 0.5),
+        legend.position = "none")
+
+
+#########
+
+
+g_data_cand_inner = ggplot() +
+  # Add basemap
+  basemap_gglayer(
+    ext = inner_london_draw,
+    map_service = "carto",
+    map_type = "light_no_labels",  # Or any basemap type you prefer
+  ) +
+  scale_fill_identity() + 
+  # Add a new scale for the polygons
+  new_scale_fill() +
+  # Add borough polygons with independent fill
+  geom_sf(data = borough_polygons_draw %>% filter(inner == TRUE),
+          aes(fill = original_source),
+          inherit.aes = FALSE,
+          alpha = 0.4,
+          linewidth = 0.1) +
+  
+  # Add labels for borough polygons
+  geom_sf_text(data = (borough_polygons_draw %>% filter(inner == TRUE)),
+                aes(label = NUM,
+                geometry = geometry),
+                stat = "sf_coordinates",
+                inherit.aes = FALSE,
+                # bold
+                # fontface = "bold",
+                min.segment.length = 0.7,
+                segment.size = 0.1,
+                box.padding = 0.1,
+                direction = "y",
+                size = 2) +
+  
+  # Define fill colors for borough polygons
+  scale_fill_manual(values = c("TRUE" = "lightgreen", "FALSE" = "lightgrey")) +
+  
+  # Add a scale bar
+  annotation_scale(location = "bl",
+                   pad_x = unit(.25, "cm"),
+                   pad_y = unit(.25, "cm"),
+                   width_hint = 0.2) +
+  coord_sf(expand = FALSE) +
+  # Add title and theme
+  labs(title = "Candidate Boroughs for Analysis (Inner London)",
+       legend = "Original Data Source") +
+  theme_void() +
+  theme(plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        plot.title = element_text(family = "Arial",
+                                  size = 9,
+                                  vjust = 3,
+                                  hjust = 0.5),
+        legend.position = "none")
+
+g_data_cand_all
+g_data_cand_inner
+ggsave("candidate_boroughs.png", plot = g_data_cand_all, width = 3.25, height = 3.25, dpi = 300)
+ggsave("candidate_boroughs_inner.png", plot = g_data_cand_inner, width = 3.25, height = 3.25, dpi = 300)
+
+library(patchwork)
+library(gridExtra)
+library(gt)
+library(flextable)
+
+g <- g_data_cand_all + g_data_cand_inner + plot_layout(ncol = 2)
+ggsave("candidate_boroughs_combined.png", plot = g, width = 6.5, height = 3, dpi = 300)
+
+
+# # Divide into two columns
+# n <- nrow(borough_num)
+# split_index <- ceiling(n / 2)
+# 
+# # Split the data into two equal parts
+# split_index <- ceiling(n / 2)
+# 
+# # Pad the shorter column with NA if needed
+# borough_split <- data.frame(
+#   NUM_1 = borough_num$NUM[1:split_index],
+#   NAME_1 = borough_num$NAME[1:split_index],
+#   NUM_2 = c(borough_num$NUM[(split_index + 1):n], rep(NA, split_index - length((split_index + 1):n))),
+#   NAME_2 = c(borough_num$NAME[(split_index + 1):n], rep(NA, split_index - length((split_index + 1):n)))
+# )
+# 
+# # View the result
+# print(borough_split)
+# ??flextable
+# # Convert the gt table into a graphical object
+# g_data_cand_all + g_data_cand_inner + as_flextable.data.frame(borough_split)
+
+```
+
+# Example plots of  buffers combined with SVIs
+
+```{r}
+all_buffers
+
+# Point borough example: Westminster
+# buffers on bottom in red, alpha = 0.5
+westminster_buffers_plot <- all_buffers %>% filter(borough == "Westminster")%>%
+  st_transform(crs = 3857)
+# parking spaces above in red, alpha = 1
+westminster_clean_plot <- westminster_clean %>% st_transform(crs = 3857)
+# SVIs above in blue, alpha = 1
+westminster_svi_plot <- all_images_with_boroughs %>% filter(borough == "Westminster") %>%
+  st_transform(crs = 3857)
+
+# Set extent to a street in Westminster
+
+
+ex_point_map <- ggplot() +
+  # Add buffers
+  geom_sf(data = westminster_buffers_plot,
+          aes(fill = "red"),
+          inherit.aes = FALSE,
+          alpha = 0.5,
+          linewidth = 0.1) +
+  # Add parking spaces
+  geom_sf(data = westminster_clean_plot,
+          inherit.aes = FALSE,
+          alpha = 1,
+          color = "red",
+          size = 0.5) +
+  # Add SVIs
+  geom_sf(data = westminster_svi_plot,
+          inherit.aes = FALSE,
+          alpha = 1,
+          color = "blue",
+          size = 0.5) +
+  # Add a scale bar
+  annotation_scale(location = "bl",
+                   pad_x = unit(.25, "cm"),
+                   pad_y = unit(.25, "cm"),
+                   width_hint = 0.2) +
+  coord_sf(expand = FALSE) +
+  # Add title and theme
+  labs(title = "Example Point Map",
+       legend = "Original Data Source") +
+  theme_void() +
+  theme(plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        plot.title = element_text(family = "Arial",
+                                  size = 9,
+                                  vjust = 3,
+                                  hjust = 0.5))
+
+ex_point_map
+
+
+
+
+# Westminster SVIs (simple map of SVIs in blue)
+
+
+
+
+```
+
+
+
