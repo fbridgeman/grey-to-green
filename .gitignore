@@ -7,3 +7,4 @@ jupyter/
 =2.0.0
 _slurm/logs/
 _slurm/failed/
+_raw_london_svis/
