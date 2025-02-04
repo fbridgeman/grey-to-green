@@ -1,0 +1,33 @@
+names:
+- moving-bicycle
+- moving-bus
+- moving-car
+- moving-heavy-truck
+- moving-light-truck
+- moving-motorcycle
+- stationary-bicycle-offstreet
+- stationary-bicycle-onstreet
+- stationary-bus-onstreet
+- stationary-car-offstreet
+- stationary-car-onstreet
+- stationary-heavy-truck-offstreet
+- stationary-heavy-truck-onstreet
+- stationary-light-truck-offstreet
+- stationary-light-truck-onstreet
+- stationary-motorcycle-offstreet
+- stationary-motorcycle-onstreet
+- x_other
+nc: 18
+roboflow:
+  workspace: fbridgeman
+  project: grey-to-green
+  version: 2
+  license: Private
+  url: https://app.roboflow.com/fbridgeman/grey-to-green/2
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+
+
+
