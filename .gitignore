@@ -8,3 +8,5 @@ jupyter/
 _slurm/logs/
 _slurm/failed/
 _raw_london_svis/
+_model_runs/
+
