@@ -1,12 +1,8 @@
 .env
 envs/
-images/
 .ipynb_checkpoints/
 .jupyter/
 .submititlogs
-data/
-v2/
-v3/
 jupyter/
 =2.0.0
 _slurm/logs/
