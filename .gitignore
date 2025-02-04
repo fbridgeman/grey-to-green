@@ -5,8 +5,10 @@ envs/
 .submititlogs
 jupyter/
 =2.0.0
-_slurm/logs/
-_slurm/failed/
+slurm/logs/
+slurm/failed/
 london_SVIs/
-_model_runs/
-
+model_runs/
+all_panoID_locations/
+sampled_panoID_locations/
+val_results/
