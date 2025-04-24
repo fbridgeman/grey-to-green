@@ -5,6 +5,19 @@ date: "2024-10-04"
 output: html_document
 ---
 
+This script imports ground truth parking data as shapefiles (either points, polylines, or polygons),
+cleans them, and merges them into one clean file with which to conduct analysis.
+
+Into ./data/clean/ this script saves the cleaned boroughs as shapefiles named [BOROUGH NAME]_clean.shp
+as well as three merged files for each data type:
+- joint_points_clean.shp
+- joint_polygons_clean.shp
+- joint_polylines_clean.shp
+
+The cleaner also imports a shapefile of the PanoIDs of all SVIs
+into an sf object called all_images, assigns them to a borough, cleans the sf object, and saves it as
+"all_images_with_boroughs.shp" in the same directory.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
@@ -152,13 +165,13 @@ westminster_clean <- westminster_transformed %>%
 joint_points <- rbind(camden_clean, westminster_clean)
 
 # Save the cleaned data to individual shapefiles
-st_write(camden_clean, "./clean_data/camden_clean.shp", append = FALSE)
+st_write(camden_clean, "./data/clean/individual_boroughs/camden_clean.shp", append = FALSE)
 
 # # Save the cleaned Kensington and Chelsea data to a shapefile
-# st_write(ken_and_chel_clean, "./clean_data/kensington_and_chelsea_clean.shp", append = FALSE)
+# st_write(ken_and_chel_clean, "./data/clean/individual_boroughs/kensington_and_chelsea_clean.shp", append = FALSE)
 
 # Save the cleaned Westminster data to a shapefile
-st_write(westminster_clean, "./clean_data/westminster_clean.shp", append = FALSE)
+st_write(westminster_clean, "./data/clean/individual_boroughs/westminster_clean.shp", append = FALSE)
 
 # Filter out rows with empty geometry in joint_points
 joint_points_clean <- joint_points %>%
@@ -169,22 +182,8 @@ joint_points_clean <- joint_points %>%
 sum(st_is_empty(joint_points_clean$geometry))  # This should return 0
 
 # Save the cleaned joint_points dataset to a shapefile
-st_write(joint_points_clean, "./clean_data/joint_points_clean.shp", append = FALSE)
+st_write(joint_points_clean, "./data/clean/joint_points_clean.shp", append = FALSE)
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -299,13 +298,13 @@ joint_polygons_clean <- joint_polygons %>%
 sum(st_is_empty(joint_polygons_clean$geometry))  # This should return 0
 
 # Save the cleaned data to individual shapefiles
-st_write(city_of_london_clean, "./clean_data/city_of_london_clean.shp", append = FALSE)
-st_write(hackney_clean, "./clean_data/hackney_clean.shp", append = FALSE)
-st_write(harrow_clean, "./clean_data/harrow_clean.shp", append = FALSE)
-st_write(islington_clean, "./clean_data/islington_clean.shp", append = FALSE)
-st_write(wandsworth_clean, "./clean_data/wandsworth_clean.shp", append = FALSE)
+st_write(city_of_london_clean, "./data/clean/individual_boroughs/city_of_london_clean.shp", append = FALSE)
+st_write(hackney_clean, "./data/clean/individual_boroughs/hackney_clean.shp", append = FALSE)
+st_write(harrow_clean, "./data/clean/individual_boroughs/harrow_clean.shp", append = FALSE)
+st_write(islington_clean, "./data/clean/individual_boroughs/islington_clean.shp", append = FALSE)
+st_write(wandsworth_clean, "./data/clean/individual_boroughs/wandsworth_clean.shp", append = FALSE)
 # Save the cleaned joint_polygons dataset to a shapefile
-st_write(joint_polygons_clean, "./clean_data/joint_polygons_clean.shp", append = FALSE)
+st_write(joint_polygons_clean, "./data/clean/joint_polygons_clean.shp", append = FALSE)
 
 
 ```
@@ -407,11 +406,11 @@ joint_polylines_clean <- joint_polylines %>%
 sum(st_is_empty(joint_polylines_clean$geometry))  # This should return 0
 
 # save the cleaned data to individual shapefiles
-st_write(hounslow_clean, "./clean_data/hounslow_clean.shp", append = FALSE)
-st_write(sutton_clean, "./clean_data/sutton_clean.shp", append = FALSE)
-st_write(tower_hamlets_clean, "./clean_data/tower_hamlets_clean.shp", append = FALSE)
+st_write(hounslow_clean, "./data/clean/individual_boroughs/hounslow_clean.shp", append = FALSE)
+st_write(sutton_clean, "./data/clean/individual_boroughs/sutton_clean.shp", append = FALSE)
+st_write(tower_hamlets_clean, "./data/clean/individual_boroughs/tower_hamlets_clean.shp", append = FALSE)
 # Save the cleaned joint_polylines_clean dataset to a shapefile
-st_write(joint_polylines_clean, "./clean_data/joint_polylines_clean.shp", append = FALSE)
+st_write(joint_polylines_clean, "./data/clean/joint_polylines_clean.shp", append = FALSE)
 joint_polylines_clean
 ```
 
@@ -437,6 +436,8 @@ all_images_with_boroughs <- st_join(all_images_transformed, borough_polygons["NA
 all_images_with_boroughs <- all_images_with_boroughs %>%
   rename(borough = NAME)
 
+# save all images with borough to a shapefile
+st_write(all_images_with_boroughs, "./data/clean/all_images_with_boroughs.shp", append = FALSE)
 ```
 
 

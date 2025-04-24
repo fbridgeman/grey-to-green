@@ -1,3 +1,85 @@
+#' ---
+#' collate_ground_truth_totals_per_borough.R
+#' Title: Collect Ground Truth Parking Totals Per Borough
+#' Author: Felix Bridgeman
+#' Date: 2024-12-12
+#' LAST EDITED: 2025-04-17
+#' ---
+#'
+#' ## Overview
+#' This script processes geographical and parking data for London boroughs, 
+#' collating totals and preparing the data for further analysis. It integrates 
+#' spatial data with parking information and calculates total parking spaces 
+#' for each borough based on their respective geometries (point, polygon, or polyline).
+#'
+#' ## Inputs:
+#' - `../raw_london/On-street parking/On-street parking (Alex)`:
+#'   - Spatial data for London boroughs.
+#' - `joint_points`, `joint_polygons`, `joint_polylines`:
+#'   - Data frames containing parking space information for points, polygons, and polylines.
+#' - CPZ_coverage.csv
+#'  - A CSV file containing controlled parking zone (CPZ) coverage data for each borough.
+#'  - (Not yet created, currently hardcoded in the script)
+#' 
+#' 
+#' ## Outputs:
+#' - `evaluation_df`:
+#'   - A data frame containing borough-level data with total parking spaces and CPZ coverage, ready for further analysis.
+#' 
+#' ## Step-by-Step Description
+#'
+#' 1. **Load Required Libraries**:
+#'    - The script loads necessary libraries such as `tidyverse`, `lwgeom`, `sp`, `sf`, and `ggplot2`.
+#'
+#' 2. **Read Borough Polygons**:
+#'    - Reads spatial data for London boroughs from a specified file path.
+#'
+#' 3. **Define Borough Categories**:
+#'    - Defines various borough groupings such as `original_boroughs`, `sampling_boroughs`, 
+#'      `regression_boroughs`, and `inner_boroughs`.
+#'
+#' 4. **Create Mapping Data Frames**:
+#'    - Creates data frames (`borough_num`, `cand_num`, `regression_num`) to map borough names 
+#'      to numerical identifiers for easier processing.
+#'
+#' 5. **Join Data to Borough Polygons**:
+#'    - Adds numerical identifiers and source information to the borough polygons 
+#'      by joining the mapping data frames.
+#'
+#' 6. **Prepare Evaluation Data**:
+#'    - Filters and modifies the borough data to include only those boroughs 
+#'      relevant for evaluation. Additional boroughs are appended to the list 
+#'      of `data_avail`.
+#'
+#' 7. **Assign Borough Identifiers**:
+#'    - Adds a unique identifier (`id`) for each borough in the evaluation data.
+#'
+#' 8. **Assign Original Shapes**:
+#'    - Manually assigns the original geometry type (`point`, `polygon`, or `polyline`) 
+#'      for each borough.
+#'
+#' 9. **Calculate Total Parking Spaces**:
+#'    - Iterates through each borough in the evaluation data and calculates the 
+#'      total parking spaces based on the geometry type:
+#'        - **Point**: Aggregates parking spaces from `joint_points`.
+#'        - **Polygon**: Aggregates parking spaces from `joint_polygons`.
+#'        - **Polyline**: Aggregates parking spaces from `joint_polylines`.
+#'    - Missing data is handled, and borough-specific totals are manually updated where necessary.
+#'
+#' 10. **Remove Boroughs with Insufficient Data**:
+#'     - Removes boroughs such as "Harrow" that lack sufficient data for analysis.
+#'
+#' 11. **Add Controlled Parking Zone (CPZ) Coverage**:
+#'     - Adds a `CPZ_coverage` column to the evaluation data, specifying the 
+#'       percentage of controlled parking zones for each borough.
+#'
+#' ## Notes
+#' - The script includes hardcoded updates for specific boroughs where data is missing.
+#' - The final output (`evaluation_df`) contains borough-level data with total parking 
+#'   spaces and CPZ coverage, ready for further analysis.
+#' 
+
+
 # Preparing our boroughs
 
 library(tidyverse)

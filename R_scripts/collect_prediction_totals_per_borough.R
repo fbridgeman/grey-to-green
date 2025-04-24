@@ -1,3 +1,70 @@
+#' ---
+#' collect_prediction_totals_per_borough.R
+#' Title: Collect Prediction Totals Per Borough
+#' Author: Felix Bridgeman
+#' Date: 2024-12-12
+#' LAST EDITED: 2025-04-17
+#' ---
+#' 
+#' ## Description
+#' This script processes parking count data for different boroughs by reading 
+#' prediction results from CSV files and aggregating the counts into a single 
+#' data frame (`counts_df`). The script handles two configurations (`075` and `085`) 
+#' and processes data from two directories: `OTHER BOROUGHS` and `REGRESSION BOROUGHS`.
+#' 
+#' ## Inputs:
+#' - CSV files containing parking count predictions for different boroughs.
+#'   - File naming convention includes borough name and confidence configuration (`075` or `085`).
+#'   - These files were created in the DEPLOY.ipynb notebook.
+#'   - The script assumes that the CSV files are located in:
+#'     - `/Users/felixbridgeman/My Drive/_STATS THESIS/GIS Match/RESULTS/OTHER BOROUGHS`
+#'     - `/Users/felixbridgeman/My Drive/_STATS THESIS/GIS Match/RESULTS/REGRESSION BOROUGHS`
+#'   - The CSV files contain columns for vehicle class and count.
+#'   - The script processes the following vehicle classes:
+#'     - `moving-vehicle`
+#'     - `stationary-vehicle-onstreet`
+#'     - `stationary-vehicle-offstreet`
+#' 
+#' - Directories:
+#'   - `OTHER BOROUGHS`: Contains prediction results for other boroughs.
+#'   - `REGRESSION BOROUGHS`: Contains prediction results for regression boroughs.
+#' 
+#' ## Outputs:
+#' - An updated `counts_df` data frame with aggregated parking counts for each borough 
+#'   and configuration (`075` and `085`).
+#' - Missing data (`NA`) in the final data frame indicates unmatched borough terms 
+#'   or missing files in the directories.
+#' 
+#' ## Step-by-Step Workflow
+#' 1. **Initialize Data Frame**:
+#'    - Start with a data frame (`counts_df`) containing borough polygons.
+#'    - Add a `term` column by converting borough names to lowercase and removing spaces.
+#' 
+#' 2. **Define Directories**:
+#'    - Specify paths for the main results directory, `OTHER BOROUGHS`, and `REGRESSION BOROUGHS`.
+#' 
+#' 3. **Add Placeholder Columns**:
+#'    - Add columns to `counts_df` for storing counts of moving vehicles, stationary vehicles 
+#'      (on-street and off-street) for both configurations (`075` and `085`).
+#' 
+#' 4. **Process Files in `OTHER BOROUGHS` Directory**:
+#'    - Loop through all CSV files in the `OTHER BOROUGHS` directory.
+#'    - Extract the configuration (`075` or `085`) and borough term from the file name.
+#'    - Read the CSV file and filter rows based on vehicle class.
+#'    - Populate the corresponding columns in `counts_df` with the counts for the matching borough.
+#' 
+#' 5. **Process Files in `REGRESSION BOROUGHS` Directory**:
+#'    - Repeat the same steps as above for files in the `REGRESSION BOROUGHS` directory.
+#' 
+#' 6. **Handle Missing Data**:
+#'    - Identify rows in `counts_df` where counts are still `NA` (missing) for further investigation.
+#' 
+#' ## Notes
+#' - The script assumes a specific file naming convention for the CSV files.
+#' - Missing data (`NA`) in the final data frame may indicate unmatched borough terms 
+#'   or missing files in the directories.
+#' - Ensure the required libraries (e.g., `dplyr`, `readr`, `stringr`) are loaded before running the script.
+#' 
 
 # Read the parking counts for each borough
 
