@@ -12,3 +12,6 @@ model_runs/
 all_panoID_locations/
 sampled_panoID_locations/
 val_results/
+start_r.sh
+start_r_language_server.sh
+.vscode/

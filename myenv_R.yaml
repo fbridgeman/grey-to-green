@@ -1,0 +1,16 @@
+name: myenv_R
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.3.2
+  - r-4vscode
+  - r-tidyverse
+  - r-sf
+  - r-ggplot2
+  - r-caret
+  - r-broom
+  - r-lwgeom
+  - r-GGally
+
+prefix: /gpfs/gibbs/project/miranda/fwb7/yolov8/envs/myenv_R
