@@ -1,16 +1,33 @@
-# Yale HPC
-# Trial 2 / Generalized Code
-# Updated to take in user settings 12 NOV 2024
 
+"""
+train.py
+This script trains a YOLOv8 model using the ultralytics library.
+It allows the user to specify various parameters such as dataset version,
+project version, model type, and GPU allocation.
+
+I recently modified the script to work off set variables instead of command
+line arguments
+Inputs: 
+- 
+
+Author: Felix Bridgeman
+Last updated: 2025-04-17 (made it work of set variables)
+"""
+
+## SET VARIABLES
+DATASET = 'v4'
+CHOSEN_MODEL = "yolo11x.pt"
+NUMBER_OF_GPUS = '4'
+MODEL_BUILD_SUBDIR = "beta4"
+RUN_NAME = "v4_yolo11x"
 
 from ultralytics import YOLO
 import os
 
 # Update ultralytics settings
 # PROMPT 1
-dataset_input = input("What dataset version do you want to be called? ").strip().lower()
-# PROMPT 2
-project_input = input("What project version do you want to be called? ").strip().lower()
+#dataset_input = input("What dataset version do you want to be called? ").strip().lower()
+dataset_input = DATASET
 
 # List of available models
 models = {
@@ -29,28 +46,35 @@ print("Available models:")
 for key, value in models.items():
     print(f"{key}: {value}")
 
-# PROMPT 3
+# PROMPT 2
 # Prompt the user to choose a model
 model_choice = input("Enter the number of the model you want to load: ").strip()
 
-# Validate the choice and load the model
-if model_choice in models:
-    chosen_model = models[model_choice]
-    model = YOLO(chosen_model)
-    print(f"Loaded model: {chosen_model}")
-else:
-    model = YOLO("yolo11x.pt")
-    print("Invalid choice. Defaulted to yolo11x.")
+model = YOLO(CHOSEN_MODEL)
+## Validate the choice and load the model, defaulting to yolo11x if invalid
+# if model_choice in models:
+#     chosen_model = models[model_choice]
+#     model = YOLO(chosen_model)
+#     print(f"Loaded model: {chosen_model}")
+# else:
+#     model = YOLO("yolo11x.pt")
+#     print("Invalid choice. Defaulted to yolo11x.")
+
+# PROMPT 3
+# gpu_input = input("How many GPUs have you allocated? ").strip().lower()
+gpu_input = NUMBER_OF_GPUS
 
 # PROMPT 4
-gpu_input = input("How many GPUs have you allocated? ").strip().lower()
+# project_input = input("What do you want this project to be called? ").strip().lower()
+project_input = MODEL_BUILD_SUBDIR
 
 # PROMPT 5
-run_input = input("What do you want this run do you want to be called? ").strip().lower()
+#run_input = input("What do you want this run do you want to be called? ").strip().lower()
+run_input = RUN_NAME
 
 # data_location = os.path.join("/gpfs/gibbs/project/miranda/fwb7/yolov8/", dataset_input, "data.yaml")
 data_location = os.path.join("/vast/palmer/scratch/miranda/fwb7/yolov8", dataset_input, "data.yaml")
-project_location = os.path.join("/gpfs/gibbs/project/miranda/fwb7/yolov8/", project_input)
+project_location = os.path.join("/gpfs/gibbs/project/miranda/fwb7/yolov8/model_builds/", project_input)
 
 if gpu_input == "1":
     gpu_num = 0
