@@ -5,6 +5,8 @@
 #' 
 
 library(dplyr)
+library(GGally)
+
 # combine counts_df with evaluation_df
 # get names for each to check
 names(counts_df)
@@ -49,7 +51,6 @@ data %>%
   cor()
 
 # plot nicely
-library(GGally)
 ggpairs(data, columns = c("total_spaces",
                           "HECTARES",
                           "Onstreet.",
